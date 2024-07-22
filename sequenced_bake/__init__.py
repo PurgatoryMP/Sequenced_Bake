@@ -17,7 +17,7 @@ bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
     "version": (1, 0),
-    "blender": (4, 1, 0),
+    "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Add-on for material sequenced baking in Blender",
     "category": "3D View"
