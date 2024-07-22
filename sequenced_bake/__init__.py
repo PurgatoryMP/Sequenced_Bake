@@ -38,6 +38,7 @@ class SequencedBakePanel(Panel):
     bl_category = 'Sequenced Bake'
 
     def draw(self, context):
+        # setup the UI elements
         layout = self.layout
 
         col = layout.column(align=True)
@@ -80,8 +81,6 @@ class SequencedBakeOperator(Operator):
     bl_description = "Start the sequenced baking process"
 
     def execute(self, context):
-        # Perform sequenced bake logic here
-        # Add your code for the baking process
 
         # Define the root directory.
         root_directory = bpy.context.scene.sequenced_bake_output_path
