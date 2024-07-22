@@ -2,8 +2,7 @@
 
 ## Description:
 	
-### This blender add-on allows the user to bake out animated material sequences based on the length of the timeline.
-### Materials can be animated and the indevidual maps and there size can be defined for baking.
+ - Sequenced Bake is a Blender 4.2 add-on designed to streamline the process of baking animated materials. With this add-on, users can efficiently bake out material sequences with a range of customizable options, enhancing their workflow and output quality.
 
 ## Key Features
 
