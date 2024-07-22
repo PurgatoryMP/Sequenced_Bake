@@ -2,8 +2,8 @@
 
 ## Description:
 	
-	This blender add-on allows the user to bake out animated material sequences based on the length of the timeline.
-	Materials can be animated and the indevidual maps and there size can be defined for baking.
+### This blender add-on allows the user to bake out animated material sequences based on the length of the timeline.
+### Materials can be animated and the indevidual maps and there size can be defined for baking.
 	
 ### Installation:
 	
