@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 id = "sequenced_bake"
 name = "Sequenced Bake"
-version = "1.0.0"
+version = "1.0.1"
 tagline = "Baking toolset for baking material sequences"
 maintainer = "Anthony O'Connell"
 type = "add-on"
