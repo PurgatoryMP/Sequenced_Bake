@@ -16,7 +16,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 0, 2),
+    "version": (1, 0, 3),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -47,6 +47,94 @@ image_formats = [
 ]
 
 generated_images = []
+
+class SequenceBakeProperties(PropertyGroup):
+    sequenced_bake_output_path: bpy.props.StringProperty(
+        name="Output Path",
+        default="",
+        subtype='DIR_PATH',
+        description='Define the output path for the rendered images'
+    )
+    sequenced_bake_width: bpy.props.IntProperty(
+        name="Width", 
+        description='The width of the baked image',
+        default=1024, 
+        min=1, 
+        max=4096
+    )
+    sequenced_bake_height: bpy.props.IntProperty(
+        name="Height",
+        description='The height of the baked image',
+        default=1024, 
+        min=1, 
+        max=4096
+    )
+    sequenced_bake_normal: bpy.props.BoolProperty(
+        name="Normal",
+        description='Enable to bake the normal map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_roughness: bpy.props.BoolProperty(
+        name="Roughness",
+        description='Enable to bake the roughness map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_glossy: bpy.props.BoolProperty(
+        name="Glossy",
+        description='Enable to bake the glossy map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_emission: bpy.props.BoolProperty(
+        name="Emission",
+        description='Enable to bake the emissive map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_ambient_occlusion: bpy.props.BoolProperty(
+        name="Ambient Occlusion",
+        description='Enable to bake the ambient occlusion map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_shadow: bpy.props.BoolProperty(
+        name="Shadow",
+        description='Enable to bake the shadow map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_position: bpy.props.BoolProperty(
+        name="Position",
+        description='Enable to bake the position map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_uv: bpy.props.BoolProperty(
+        name="UV",
+        description='Enable to bake the UV map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_environment: bpy.props.BoolProperty(
+        name="Environment",
+        description='Enable to bake the environment map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_diffuse: bpy.props.BoolProperty(
+        name="Diffuse",
+        description='Enable to bake the deffuse map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_transmission: bpy.props.BoolProperty(
+        name="Transmission",
+        description='Enable to bake the transmission map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_combined: bpy.props.BoolProperty(
+        name="Combined",
+        description='Enable to bake the combined map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_metallic: bpy.props.BoolProperty(
+        name="Metallic",
+        description='Enable to bake the metallic map for the selected objects active material',
+        default=False
+    )
+    
 
 class SpriteSheetProperties(PropertyGroup):
     directory: bpy.props.StringProperty(
@@ -119,7 +207,7 @@ class SpriteSheetProperties(PropertyGroup):
     )
 
 class SequencedBakePanel(Panel):
-    bl_label = "{} v{}".format("Sequenced Bake", bl_info["version"])
+    bl_label = "{} v{}".format(bl_info["name"], bl_info["version"])
     bl_idname = "VIEW3D_PT_sequenced_bake"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -129,38 +217,40 @@ class SequencedBakePanel(Panel):
     
         layout = self.layout        
         scene = context.scene
-        props = scene.sprite_sheet_props
+        sequence_bake_props = scene.sequence_bake_props
+        sprite_sheet_props = scene.sprite_sheet_props
 
         # Output Path
         box = layout.box()
         col = box.column(align=True)
         col.label(text="Material Output Path:")
-        col.prop(context.scene, "sequenced_bake_output_path", text="")
+        col.prop(sequence_bake_props, "sequenced_bake_output_path")
         
         col.separator(factor=3.0, type='LINE')
         
         # Generated Image Size
         col.label(text="Generated Image Size:")
         row = col.row(align=True)
-        row.prop(context.scene, "sequenced_bake_width")
-        row.prop(context.scene, "sequenced_bake_height")
+        row.prop(sequence_bake_props, "sequenced_bake_width")
+        row.prop(sequence_bake_props, "sequenced_bake_height")
         
         col.separator(factor=3.0, type='LINE')
         
         # Bake Type Options
         col.label(text="Bake Type Options:")
-        col.prop(context.scene, "sequenced_bake_normal", text="Normal")
-        col.prop(context.scene, "sequenced_bake_roughness", text="Roughness")
-        col.prop(context.scene, "sequenced_bake_glossy", text="Glossy")
-        col.prop(context.scene, "sequenced_bake_emission", text="Emission")
-        col.prop(context.scene, "sequenced_bake_ambient_occlusion", text="Ambient Occlusion")
-        col.prop(context.scene, "sequenced_bake_shadow", text="Shadow")
-        col.prop(context.scene, "sequenced_bake_position", text="Position")
-        col.prop(context.scene, "sequenced_bake_uv", text="UV")
-        col.prop(context.scene, "sequenced_bake_environment", text="Environment")
-        col.prop(context.scene, "sequenced_bake_diffuse", text="Diffuse")
-        col.prop(context.scene, "sequenced_bake_transmission", text="Transmission")
-        col.prop(context.scene, "sequenced_bake_combined", text="Combined")
+        col.prop(sequence_bake_props, "sequenced_bake_normal")
+        col.prop(sequence_bake_props, "sequenced_bake_roughness")
+        col.prop(sequence_bake_props, "sequenced_bake_glossy")
+        col.prop(sequence_bake_props, "sequenced_bake_emission")
+        col.prop(sequence_bake_props, "sequenced_bake_ambient_occlusion")
+        col.prop(sequence_bake_props, "sequenced_bake_shadow")
+        col.prop(sequence_bake_props, "sequenced_bake_position")
+        col.prop(sequence_bake_props, "sequenced_bake_uv")
+        col.prop(sequence_bake_props, "sequenced_bake_environment")
+        col.prop(sequence_bake_props, "sequenced_bake_diffuse")
+        col.prop(sequence_bake_props, "sequenced_bake_transmission")
+        col.prop(sequence_bake_props, "sequenced_bake_combined")
+        col.prop(sequence_bake_props, "sequenced_bake_metallic")
         
         col.separator(factor=3.0, type='LINE')
         
@@ -175,40 +265,40 @@ class SequencedBakePanel(Panel):
         col.separator()
         
         col.label(text="Image Sequence Direcotry:")
-        col.prop(props, "directory")
+        col.prop(sprite_sheet_props, "directory")
         
         col.separator(factor=3.0, type='LINE')
         
         # Sprite Sheet Properties
         col.label(text="Sprite Sheet Properties:")
         
-        col.prop(props, "columns")
-        col.prop(props, "rows")        
+        col.prop(sprite_sheet_props, "columns")
+        col.prop(sprite_sheet_props, "rows")        
         
         col.separator()
         
-        col.prop(props, "image_width")
-        col.prop(props, "image_height")
+        col.prop(sprite_sheet_props, "image_width")
+        col.prop(sprite_sheet_props, "image_height")
         
         col.separator()
         
-        col.prop(props, "start_frame")
-        col.prop(props, "end_frame")  
+        col.prop(sprite_sheet_props, "start_frame")
+        col.prop(sprite_sheet_props, "end_frame")  
         
         col.separator()
 
-        col.prop(props, "is_reversed")
+        col.prop(sprite_sheet_props, "is_reversed")
 
         col.separator(factor=3.0, type='LINE')
         
         col.label(text="Image Format:")
-        col.prop(props, "image_format")
+        col.prop(sprite_sheet_props, "image_format")
         
         col.separator()
         
-        col.prop(props, "is_alpha")
-        col.prop(props, "open_images")
-        col.prop(props, "open_output_directory")
+        col.prop(sprite_sheet_props, "is_alpha")
+        col.prop(sprite_sheet_props, "open_images")
+        col.prop(sprite_sheet_props, "open_output_directory")
         
         col.separator(factor=3.0, type='LINE')
         
@@ -223,17 +313,20 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
     _subdirs = []
     _current_index = 0
     _props = None
-
+    _sb_props = None
+    
     def execute(self, context):
         self._props = context.scene.sprite_sheet_props
+        self._sb_props = context.scene.sequence_bake_props
         
-        directory = self._props.directory
+        # Get the sprite sheet directory containing the sub-directorys with image sequences in them.
+        directory = bpy.path.abspath(self._props.directory)        
         if not directory:
-            print(f"No image sequence directory provided, Defaulting to Material Output Path.")            
-            directory = bpy.context.scene.sequenced_bake_output_path
+            self.report({'ERROR'}, f"No image sequence directory provided, Defaulting to Material Output Path.")             
+            directory = bpy.path.abspath(self._sb_props.sequenced_bake_output_path)
             if not directory:
-                print("Material output path provided.")
-                return
+                self.report({'ERROR'}, "A material output path was not provided.") 
+                return {"CANCELED"}
         
         self._subdirs = [os.path.join(directory, subdir) for subdir in os.listdir(directory) if os.path.isdir(os.path.join(directory, subdir))]
         self._current_index = 0
@@ -247,11 +340,10 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         if event.type == 'TIMER':
             if self._current_index < len(self._subdirs):
                 subdir_path = self._subdirs[self._current_index]
-                print(f"Processing subdirectory: {subdir_path}")
+                self.report({'INFO'}, f"Processing subdirectory: {subdir_path}") 
                 self.process_subdir(subdir_path)
                 self._current_index += 1
             else:
-                print("Sprite Sheets Created Successfully")
                 self.report({'INFO'}, "Sprite Sheets Created Successfully")
                 context.window_manager.event_timer_remove(self._timer)
                 return {'FINISHED'}
@@ -263,7 +355,7 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         
         for image_path in image_paths:
             if not os.path.isfile(image_path):
-                print(f"File {image_path} does not exist.")
+                self.report({'WARNING'}, f"File {image_path} does not exist.") 
                 continue
             
             try:
@@ -279,13 +371,13 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
                 else:
                     raise OSError("Unsupported operating system")
             except Exception as e:
-                print(f"An error occurred with file {image_path}: {e.args}")
+                self.report({'ERROR'}, f"An error occurred with file {image_path}: {e.args}") 
     
     def open_directory(self, file_path): 
         # Get the directory part of the provided path
         directory_path = os.path.dirname(file_path.replace('\\', '\\\\'))
         
-        print(f"Opening Directory: {directory_path}")
+        self.report({'INFO'}, f"Opening Directory: {directory_path}")  
         
         # Check the system and open the directory
         system = platform.system()        
@@ -312,10 +404,11 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         # Sort files numerically
         image_files_sorted = sorted(image_files, key=lambda x: int(x.split('.')[0]), reverse=is_reversed)
         
-        print(f" ")
-        print(f"~~~~~~~~~~~~~~ LOADED IMAGES ~~~~~~~~~~~~~~")
-        print(f"Image File List Count: {len(image_files_sorted)}")
-        print(f"Image Files Sort Order: {image_files_sorted}")
+        # Debug info
+        # print(f" ")
+        # print(f"~~~~~~~~~~~~~~ LOADED IMAGES ~~~~~~~~~~~~~~")
+        # print(f"Image File List Count: {len(image_files_sorted)}")
+        # print(f"Image Files Sort Order: {image_files_sorted}")
 
         images = []
         for filename in image_files_sorted:
@@ -326,17 +419,17 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
 
 
         if not images:
-            print(f"No images found in {subdir_path}, skipping.")
-            return
+            self.report({'WARNING'}, f"No images found in {subdir_path}, skipping.")  
+            return {'CANCELLED'}
         
         # Get the current settings.
         directory = self._props.directory
         if not directory:
-            print(f"No image sequence directory provided, Defaulting to Material Output Path.")            
+            self.report({'ERROR'}, "No image sequence directory provided, Defaulting to Material Output Path.")            
             directory = bpy.context.scene.sequenced_bake_output_path
             if not directory:
-                print("Material output path provided.")
-                return
+                self.report({'ERROR'}, "Material output was not provided")
+                return {'CANCELLED'}
                 
         columns = self._props.columns
         rows = self._props.rows
@@ -367,8 +460,6 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         position_index = 0
 
         for index, img in enumerate(images):
-            #print(f"Frame: {index}")
-            
             if start_frame-1 <= index <= end_frame-1:                
                 x = (position_index % columns) * image_width
                 y = (position_index // columns) * image_height
@@ -398,6 +489,7 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
                 
                 # Increment the position index
                 position_index += 1
+                bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
         # Update sprite sheet with new pixel data
         sprite_sheet.pixels = pixels.flatten()
@@ -420,7 +512,7 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         
         # Open the generated sprite sheet in the image viewer.
         bpy.ops.image.open(filepath=sprite_sheet_path)
-        print(f"Sprite sheet created and saved at: {sprite_sheet_path}")
+        self.report({'INFO'}, f"Sprite sheet created and saved at: {sprite_sheet_path}")
                
         # if our list of images contains 3 images.
         
@@ -436,54 +528,69 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
 class SequencedBakeOperator(Operator):
     bl_idname = "sequenced_bake.bake"
     bl_label = "Sequenced Bake"
-    bl_description = "Start the sequenced baking process"
+    _props = None
+
 
     def execute(self, context):
+        
+        self._props = bpy.context.scene.sequence_bake_props
 
         # Define the root directory.
-        root_directory = bpy.context.scene.sequenced_bake_output_path
+        root_directory = self._props.sequenced_bake_output_path        
+        if not root_directory:
+            self.report({'ERROR'}, "No directory provided")
+            return {'CANCELLED'}
 
         # Define the bake types to bake out
         bake_types = []
-        if bpy.context.scene.sequenced_bake_normal:
+        if self._props.sequenced_bake_normal:
             bake_types.append('NORMAL')
-        if bpy.context.scene.sequenced_bake_roughness:
+        if self._props.sequenced_bake_roughness:
             bake_types.append('ROUGHNESS')
-        if bpy.context.scene.sequenced_bake_glossy:
+        if self._props.sequenced_bake_glossy:
             bake_types.append('GLOSSY')
-        if bpy.context.scene.sequenced_bake_emission:
-            bake_types.append('Emission')
-        if bpy.context.scene.sequenced_bake_ambient_occlusion:
+        if self._props.sequenced_bake_emission:
+            bake_types.append('EMIT')
+        if self._props.sequenced_bake_ambient_occlusion:
             bake_types.append('Ambient Occlusion')
-        if bpy.context.scene.sequenced_bake_shadow:
+        if self._props.sequenced_bake_shadow:
             bake_types.append('SHADOW')
-        if bpy.context.scene.sequenced_bake_position:
+        if self._props.sequenced_bake_position:
             bake_types.append('POSITION')
-        if bpy.context.scene.sequenced_bake_uv:
+        if self._props.sequenced_bake_uv:
             bake_types.append('UV')
-        if bpy.context.scene.sequenced_bake_environment:
+        if self._props.sequenced_bake_environment:
             bake_types.append('ENVIRONMENT')
-        if bpy.context.scene.sequenced_bake_diffuse:
+        if self._props.sequenced_bake_diffuse:
             bake_types.append('DIFFUSE')
-        if bpy.context.scene.sequenced_bake_transmission:
+        if self._props.sequenced_bake_transmission:
             bake_types.append('TRANSMISSION')
-        if bpy.context.scene.sequenced_bake_combined:
+        if self._props.sequenced_bake_combined:
             bake_types.append('COMBINED')
-
+            
         # Get the current frame range
-        frame_range = range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1)
+        start_frame = bpy.context.scene.frame_start
+        end_frame = bpy.context.scene.frame_end
+        
+        frame_range = range(start_frame, end_frame + 1)
 
         # Get the active object
         obj = bpy.context.active_object
+        if not obj:
+            self.report({'ERROR'}, "No active object selected. Please select an object and try again")
+            return {'CANCELLED'}
 
         # Get the active material
         mat = obj.active_material
+        if not mat:
+            self.report({'ERROR'}, "No active object selected. Please select an object and try again")
+            return {'CANCELLED'}
 
         # Define the image size
-        image_width = bpy.context.scene.sequenced_bake_width
-        image_height = bpy.context.scene.sequenced_bake_height
+        image_width = self._props.sequenced_bake_width
+        image_height = self._props.sequenced_bake_height
 
-        # Define the function to remove the generated texture node rather than removing all the texture nodes
+        # RRemove the generated texture node rather than removing all the texture nodes
         def remove_generated_texture_node():
             material = bpy.context.active_object.active_material
             if material and material.node_tree:
@@ -533,6 +640,135 @@ class SequencedBakeOperator(Operator):
                 
                 # Update the Blender interface
                 bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+                
+        def connect_metallic_node():
+            
+            # Assuming you're working with the active object's active material
+            material = bpy.context.object.active_material
+
+            # Check if the material has a node tree and use nodes
+            if material.use_nodes:
+                nodes = material.node_tree.nodes
+                links = material.node_tree.links
+                
+                # Find the Principled BSDF and Material Output nodes
+                principled_bsdf = None
+                material_output = None
+                
+                for node in nodes:
+                    if node.type == 'BSDF_PRINCIPLED':
+                        principled_bsdf = node
+                    elif node.type == 'OUTPUT_MATERIAL':
+                        material_output = node
+                
+                if principled_bsdf and material_output:
+                    # Get the input connected to the 'Metallic' socket of the Principled BSDF node
+                    metallic_input = principled_bsdf.inputs['Metallic']
+                    
+                    if metallic_input.is_linked:
+                        # Get the node connected to the Metallic input
+                        metallic_node_link = metallic_input.links[0]
+                        connected_node = metallic_node_link.from_node
+                        connected_output_socket = metallic_node_link.from_socket
+                        
+                        # Connect it to the Surface input of the Material Output node
+                        surface_input = material_output.inputs['Surface']
+                        links.new(connected_output_socket, surface_input)
+                                
+                    else:
+                        self.report({'WARNING'}, "The Metallic input is not connected to any node")
+                else:
+                    self.report({'WARNING'}, "Principled BSDF or Material Output node not found")
+            else:
+                self.report({'WARNING'}, "The material does not use nodes")                
+        
+        def reconnect_node():
+            
+            # Reconnects the Pricipled BSDF node to the material output node.
+            # Get the active object's active material
+            material = bpy.context.object.active_material
+
+            # Check if the material has a node tree
+            if material.use_nodes:
+                nodes = material.node_tree.nodes
+                links = material.node_tree.links
+                
+                # Find the Principled BSDF and Material Output nodes
+                principled_bsdf = None
+                material_output = None
+                
+                for node in nodes:
+                    if node.type == 'BSDF_PRINCIPLED':
+                        principled_bsdf = node
+                    elif node.type == 'OUTPUT_MATERIAL':
+                        material_output = node
+                
+                if principled_bsdf and material_output:
+                    # Find the Surface input of the Material Output node
+                    surface_input = material_output.inputs['Surface']
+                    
+                    # Disconnect any existing connections to the Surface input
+                    for link in surface_input.links:
+                        links.remove(link)
+                    
+                    # Connect the Principled BSDF node's output to the Surface input
+                    bsdf_output_socket = principled_bsdf.outputs['BSDF']
+                    links.new(bsdf_output_socket, surface_input)
+                    
+                    self.report({'INFO'}, "Reconnected Principled BSDF to Material Output")
+                else:
+                    self.report({'WARNING'}, "Principled BSDF or Material Output node not found")
+            else:
+                self.report({'WARNING'}, "The material does not use nodes")
+
+        def bake_metallic():
+            
+            # Disconnect the node connected to the metallic input of the Pricipaled BSDF and connect it directly to the material output node.
+            connect_metallic_node()
+            
+            # Clear existing any texture nodes.
+            remove_generated_texture_node()
+            
+            for frame in frame_range:
+                # Set the frame and update the scene
+                bpy.context.scene.frame_set(frame)
+                bpy.context.view_layer.update()
+
+                # Create a new texture for the Image Texture node
+                texture = bpy.data.images.new(name='METALLIC', width=image_width, height=image_height, alpha=True)
+                
+                # Set the color space of the new texture to non color.
+                texture.colorspace_settings.name = 'Non-Color'
+
+                # Create a new Image Texture node
+                image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                
+                # Set node position
+                image_node.location = (400, -200)
+                image_node.image = texture
+
+                # Select the new Image Texture node
+                mat.node_tree.nodes.active = image_node
+                
+                # Bake the texture
+                try:
+                    bpy.ops.object.bake(type='EMIT')
+                except Exception as error:
+                    self.report({'ERROR'}, "No active object was selected. Please select an object and try again.")
+                    return {"CANCELLED"}
+
+                # Define the output path
+                image_path = os.path.join(root_directory, "METALLIC", str(frame) + '.png')
+
+                # Save the rendered image
+                texture.save_render(image_path)
+                
+                # Update the Blender interface
+                bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+            
+            # Reconnect the pricipled BSDF node to the material output node.
+            reconnect_node()
+            
 
         # Start baking the different material map sequences
         for bake_type in bake_types:
@@ -541,8 +777,11 @@ class SequencedBakeOperator(Operator):
 
             # Begin baking
             bake_maps(bake_type)
-            bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
-
+        
+        # Metallic Map generation.
+        if self._props.sequenced_bake_metallic:
+            bake_metallic()
+        
         # Call the function to remove the generated texture node
         remove_generated_texture_node()
 
@@ -550,68 +789,30 @@ class SequencedBakeOperator(Operator):
         for image in bpy.data.images:
             if image.users == 0:
                 bpy.data.images.remove(image)
-
-        self.report({'INFO'}, "Sequenced bake completed successfully")
+        
+        self.report({'INFO'}, "Finished.")
         return {'FINISHED'}
 
 
 def register():
-    bpy.types.Scene.sequenced_bake_output_path = bpy.props.StringProperty(
-        name="Output Path", 
-        subtype='DIR_PATH',
-        description='Define the output path for the rendered images'
-    )
-    bpy.types.Scene.sequenced_bake_width = bpy.props.IntProperty(
-        name="Width", default=1024, min=1, max=4096
-    )
-    bpy.types.Scene.sequenced_bake_height = bpy.props.IntProperty(
-        name="Height", default=1024, min=1, max=4096
-    )
-
-    bpy.types.Scene.sequenced_bake_normal = bpy.props.BoolProperty(name="Normal")
-    bpy.types.Scene.sequenced_bake_roughness = bpy.props.BoolProperty(name="Roughness")
-    bpy.types.Scene.sequenced_bake_glossy = bpy.props.BoolProperty(name="Glossy")
-    bpy.types.Scene.sequenced_bake_emission = bpy.props.BoolProperty(name="Emission")
-    bpy.types.Scene.sequenced_bake_ambient_occlusion = bpy.props.BoolProperty(name="Ambient Occlusion")
-    bpy.types.Scene.sequenced_bake_shadow = bpy.props.BoolProperty(name="Shadow")
-    bpy.types.Scene.sequenced_bake_position = bpy.props.BoolProperty(name="Position")
-    bpy.types.Scene.sequenced_bake_uv = bpy.props.BoolProperty(name="UV")
-    bpy.types.Scene.sequenced_bake_environment = bpy.props.BoolProperty(name="Environment")
-    bpy.types.Scene.sequenced_bake_diffuse = bpy.props.BoolProperty(name="Diffuse")
-    bpy.types.Scene.sequenced_bake_transmission = bpy.props.BoolProperty(name="Transmission")
-    bpy.types.Scene.sequenced_bake_combined = bpy.props.BoolProperty(name="Combined")
-    
-    bpy.utils.register_class(SequencedBakePanel)
+    # Do not allow for reletive paths by default.
+    bpy.context.preferences.filepaths.use_relative_paths = False
+    bpy.utils.register_class(SequencedBakePanel)    
     bpy.utils.register_class(SequencedBakeOperator)
+    bpy.utils.register_class(SequenceBakeProperties)
+    bpy.types.Scene.sequence_bake_props = bpy.props.PointerProperty(type=SequenceBakeProperties)
     bpy.utils.register_class(SpriteSheetProperties)
     bpy.types.Scene.sprite_sheet_props = bpy.props.PointerProperty(type=SpriteSheetProperties)
     bpy.utils.register_class(OBJECT_OT_CreateSpriteSheet)
 
-
 def unregister():
     bpy.utils.unregister_class(SequencedBakePanel)
     bpy.utils.unregister_class(SequencedBakeOperator)
+    bpy.utils.unregister_class(SequenceBakeProperties)
     bpy.utils.unregister_class(SpriteSheetProperties)
     bpy.utils.unregister_class(OBJECT_OT_CreateSpriteSheet)
-
-    del bpy.types.Scene.sequenced_bake_output_path
-    del bpy.types.Scene.sequenced_bake_width
-    del bpy.types.Scene.sequenced_bake_height
-
-    del bpy.types.Scene.sequenced_bake_normal
-    del bpy.types.Scene.sequenced_bake_roughness
-    del bpy.types.Scene.sequenced_bake_glossy
-    del bpy.types.Scene.sequenced_bake_emission
-    del bpy.types.Scene.sequenced_bake_ambient_occlusion
-    del bpy.types.Scene.sequenced_bake_shadow
-    del bpy.types.Scene.sequenced_bake_position
-    del bpy.types.Scene.sequenced_bake_uv
-    del bpy.types.Scene.sequenced_bake_environment
-    del bpy.types.Scene.sequenced_bake_diffuse
-    del bpy.types.Scene.sequenced_bake_transmission
-    del bpy.types.Scene.sequenced_bake_combined
-    del bpy.types.Scene.sprite_sheet_props
-    
+    del bpy.types.Scene.sequence_bake_props
+    del bpy.types.Scene.sprite_sheet_props   
 
 
 if __name__ == "__main__":
