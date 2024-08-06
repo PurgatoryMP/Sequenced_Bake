@@ -1,12 +1,13 @@
 schema_version = "1.0.0"
 id = "sequenced_bake"
 name = "Sequenced Bake"
-version = "1.0.3"
+version = "1.0.4"
 tagline = "Tools for baking material sequences and generating sprite sheets"
 maintainer = "Anthony O'Connell"
 type = "add-on"
-tags = ["3D View", "Material", "Bake"]
+tags = ["Material", "Bake"]
 blender_version_min =  "4.2.0"
 license = ["SPDX:GPL-3.0-or-later"]
 copyright = ["2024 Anthony O'Connell"]
 website = "https://github.com/PurgatoryMP/Sequenced_Bake"
+permissions = ["Files"]

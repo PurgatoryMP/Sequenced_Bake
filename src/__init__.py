@@ -16,7 +16,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 0, 3),
+    "version": (1, 0, 4),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -68,6 +68,16 @@ class SequenceBakeProperties(PropertyGroup):
         default=1024, 
         min=1, 
         max=4096
+    )
+    sequence_bake_image_format: bpy.props.EnumProperty(
+        name="",
+        description="Choose the image format",
+        items=image_formats
+    )
+    sequence_is_alpha: bpy.props.BoolProperty(
+        name="Use Alpha",
+        description="Use alpha channel in the generated material maps",
+        default=False
     )
     sequenced_bake_normal: bpy.props.BoolProperty(
         name="Normal",
@@ -185,12 +195,12 @@ class SpriteSheetProperties(PropertyGroup):
         description="Reverse the order images are loaded onto the sprite sheet",
         default=False
     )
-    is_alpha: bpy.props.BoolProperty(
+    sprite_sheet_is_alpha: bpy.props.BoolProperty(
         name="Use Alpha",
         description="Use alpha channel in the generated sprite sheet",
         default=False
     )
-    image_format: bpy.props.EnumProperty(
+    sprite_sheet_image_format: bpy.props.EnumProperty(
         name="",
         description="Choose the image format",
         items=image_formats
@@ -234,6 +244,15 @@ class SequencedBakePanel(Panel):
         row.prop(sequence_bake_props, "sequenced_bake_width")
         row.prop(sequence_bake_props, "sequenced_bake_height")
         
+        col.separator()
+        
+        col.label(text="Baked Image Format:")
+        col.prop(sequence_bake_props, "sequence_bake_image_format")
+        
+        col.separator()
+        
+        col.prop(sequence_bake_props, "sequence_is_alpha")
+        
         col.separator(factor=3.0, type='LINE')
         
         # Bake Type Options
@@ -256,13 +275,23 @@ class SequencedBakePanel(Panel):
         
         # Baking Button
         col.operator("sequenced_bake.bake", text="Bake Material Sequence")  
-        
+
+class SpriteSheetCreatorPanel(Panel):
+    bl_label = "Sprite Sheet Creator"
+    bl_idname = "VIEW3D_PT_Sprite_Sheet_Creator"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'Sequenced Bake'
+
+    def draw(self, context):
+    
+        layout = self.layout        
+        scene = context.scene
+        sprite_sheet_props = scene.sprite_sheet_props
+
         # Sprite Sheet Creator Section        
         box = layout.box()
         col = box.column(align=True)
-        col.label(text="Sprite Sheet Creator:")
-        
-        col.separator()
         
         col.label(text="Image Sequence Direcotry:")
         col.prop(sprite_sheet_props, "directory")
@@ -292,11 +321,11 @@ class SequencedBakePanel(Panel):
         col.separator(factor=3.0, type='LINE')
         
         col.label(text="Image Format:")
-        col.prop(sprite_sheet_props, "image_format")
+        col.prop(sprite_sheet_props, "sprite_sheet_image_format")
         
         col.separator()
         
-        col.prop(sprite_sheet_props, "is_alpha")
+        col.prop(sprite_sheet_props, "sprite_sheet_is_alpha")
         col.prop(sprite_sheet_props, "open_images")
         col.prop(sprite_sheet_props, "open_output_directory")
         
@@ -311,6 +340,7 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
     bl_idname = "object.create_sprite_sheet"
     _timer = None
     _subdirs = []
+    _subdir_count = 0
     _current_index = 0
     _props = None
     _sb_props = None
@@ -322,13 +352,14 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         # Get the sprite sheet directory containing the sub-directorys with image sequences in them.
         directory = bpy.path.abspath(self._props.directory)        
         if not directory:
-            self.report({'ERROR'}, f"No image sequence directory provided, Defaulting to Material Output Path.")             
+            self.report({'WARNING'}, f"No image sequence directory provided, Defaulting to Material Output Path.")             
             directory = bpy.path.abspath(self._sb_props.sequenced_bake_output_path)
             if not directory:
                 self.report({'ERROR'}, "A material output path was not provided.") 
                 return {"CANCELED"}
         
         self._subdirs = [os.path.join(directory, subdir) for subdir in os.listdir(directory) if os.path.isdir(os.path.join(directory, subdir))]
+        self._subdir_count = len(self._subdirs)
         self._current_index = 0
         
         wm = context.window_manager
@@ -392,9 +423,10 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
     
         file_names = os.listdir(subdir_path)
     
-        # Filter out only image files (assuming they are .png, .jpg, etc.)
-        image_files = [f for f in file_names if f.endswith(('png', 'jpg', 'jpeg'))]
+        # Get the images from the sub-directorys.
+        image_files = [f for f in file_names]
         
+        # Defined if the sequence is going to be reversed or not.
         is_reversed = self._props.is_reversed
         label_reversed = ""
         
@@ -405,32 +437,32 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         image_files_sorted = sorted(image_files, key=lambda x: int(x.split('.')[0]), reverse=is_reversed)
         
         # Debug info
-        # print(f" ")
-        # print(f"~~~~~~~~~~~~~~ LOADED IMAGES ~~~~~~~~~~~~~~")
-        # print(f"Image File List Count: {len(image_files_sorted)}")
-        # print(f"Image Files Sort Order: {image_files_sorted}")
+        print(f" ")
+        print(f"~~~~~~~~~~~~~~ LOADED IMAGES ~~~~~~~~~~~~~~")
+        print(f"Image File List Count: {len(image_files_sorted)}")
+        print(f"Image Files Sort Order: {image_files_sorted}")
 
         images = []
         for filename in image_files_sorted:
-            if filename.endswith(('.png', '.jpg', '.jpeg')):
-                img_path = os.path.join(subdir_path, filename)
-                image = bpy.data.images.load(img_path)
-                images.append(image)
+            img_path = os.path.join(subdir_path, filename)
+            image = bpy.data.images.load(img_path)
+            images.append(image)
 
 
         if not images:
             self.report({'WARNING'}, f"No images found in {subdir_path}, skipping.")  
             return {'CANCELLED'}
         
-        # Get the current settings.
-        directory = self._props.directory
+        # Get the current settings
+        directory = bpy.path.abspath(self._props.directory) 
         if not directory:
             self.report({'ERROR'}, "No image sequence directory provided, Defaulting to Material Output Path.")            
-            directory = bpy.context.scene.sequenced_bake_output_path
+            directory = bpy.path.abspath(self._sb_props.sequenced_bake_output_path)
             if not directory:
                 self.report({'ERROR'}, "Material output was not provided")
                 return {'CANCELLED'}
-                
+
+        # Get sprite sheet properties
         columns = self._props.columns
         rows = self._props.rows
         image_width = self._props.image_width
@@ -438,8 +470,8 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         start_frame = self._props.start_frame
         end_frame = self._props.end_frame
         total_frames = end_frame - start_frame + 1
-        is_alpha = self._props.is_alpha
-        image_format = self._props.image_format
+        sprite_sheet_is_alpha = self._props.sprite_sheet_is_alpha
+        sprite_sheet_image_format = self._props.sprite_sheet_image_format
         open_images = self._props.open_images
         open_output_directory = self._props.open_output_directory
         
@@ -448,7 +480,7 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
             name=f"{os.path.basename(subdir_path)}_sprite_sheet",
             width=columns * image_width,
             height=rows * image_height,
-            alpha=is_alpha
+            alpha=sprite_sheet_is_alpha
             )
             
         sprite_sheet.pixels = [0] * (columns * image_width * rows * image_height * 4)
@@ -494,7 +526,7 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         # Update sprite sheet with new pixel data
         sprite_sheet.pixels = pixels.flatten()
         
-        file_name = f"{os.path.basename(subdir_path)}_sprite_sheet{label_reversed}.{image_format}"
+        file_name = f"{os.path.basename(subdir_path)}_sprite_sheet{label_reversed}.{sprite_sheet_image_format}"
                 
         sprite_sheet_path = os.path.join(directory, file_name)
         
@@ -510,26 +542,23 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
             if img.name not in generated_images:
                 bpy.data.images.remove(img)
         
-        # Open the generated sprite sheet in the image viewer.
+        # Open the generated sprite sheet in the image viewer
         bpy.ops.image.open(filepath=sprite_sheet_path)
         self.report({'INFO'}, f"Sprite sheet created and saved at: {sprite_sheet_path}")
                
-        # if our list of images contains 3 images.
-        
-        if len(generated_images) == 3:
+        # Clear the list of generated images while keeping the sprite sheets that were generated        
+        if len(generated_images) == self._subdir_count:
             if open_images:
                 self.open_images(generated_images)            
             if open_output_directory:
-                self.open_directory(directory)
-                
-            # Clear the list of image paths.
+                self.open_directory(directory)                
+            # Clear the list of image paths
             generated_images.clear()
     
 class SequencedBakeOperator(Operator):
     bl_idname = "sequenced_bake.bake"
     bl_label = "Sequenced Bake"
     _props = None
-
 
     def execute(self, context):
         
@@ -570,9 +599,12 @@ class SequencedBakeOperator(Operator):
             
         # Get the current frame range
         start_frame = bpy.context.scene.frame_start
-        end_frame = bpy.context.scene.frame_end
-        
+        end_frame = bpy.context.scene.frame_end        
         frame_range = range(start_frame, end_frame + 1)
+        
+        # Get property settings.
+        sequence_bake_image_format = self._props.sequence_bake_image_format        
+        sequence_is_alpha = self._props.sequence_is_alpha
 
         # Get the active object
         obj = bpy.context.active_object
@@ -617,7 +649,7 @@ class SequencedBakeOperator(Operator):
                 bpy.context.view_layer.update()
 
                 # Create a new texture for the Image Texture node
-                texture = bpy.data.images.new(name=bake_type, width=image_width, height=image_height, alpha=True)
+                texture = bpy.data.images.new(name=bake_type, width=image_width, height=image_height, alpha=sequence_is_alpha)
 
                 # Create a new Image Texture node
                 image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
@@ -633,7 +665,7 @@ class SequencedBakeOperator(Operator):
                 bpy.ops.object.bake(type=bake_type)
 
                 # Define the output path
-                image_path = os.path.join(root_directory, bake_type, str(frame) + '.png')
+                image_path = os.path.join(root_directory, bake_type, str(frame) + f".{sequence_bake_image_format}")
 
                 # Save the rendered image
                 texture.save_render(image_path)
@@ -735,7 +767,7 @@ class SequencedBakeOperator(Operator):
                 bpy.context.view_layer.update()
 
                 # Create a new texture for the Image Texture node
-                texture = bpy.data.images.new(name='METALLIC', width=image_width, height=image_height, alpha=True)
+                texture = bpy.data.images.new(name='METALLIC', width=image_width, height=image_height, alpha=sequence_is_alpha)
                 
                 # Set the color space of the new texture to non color.
                 texture.colorspace_settings.name = 'Non-Color'
@@ -758,7 +790,7 @@ class SequencedBakeOperator(Operator):
                     return {"CANCELLED"}
 
                 # Define the output path
-                image_path = os.path.join(root_directory, "METALLIC", str(frame) + '.png')
+                image_path = os.path.join(root_directory, "METALLIC", str(frame) + f".{sequence_bake_image_format}")
 
                 # Save the rendered image
                 texture.save_render(image_path)
@@ -767,8 +799,7 @@ class SequencedBakeOperator(Operator):
                 bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
             
             # Reconnect the pricipled BSDF node to the material output node.
-            reconnect_node()
-            
+            reconnect_node()            
 
         # Start baking the different material map sequences
         for bake_type in bake_types:
@@ -797,7 +828,8 @@ class SequencedBakeOperator(Operator):
 def register():
     # Do not allow for reletive paths by default.
     bpy.context.preferences.filepaths.use_relative_paths = False
-    bpy.utils.register_class(SequencedBakePanel)    
+    bpy.utils.register_class(SequencedBakePanel)
+    bpy.utils.register_class(SpriteSheetCreatorPanel)
     bpy.utils.register_class(SequencedBakeOperator)
     bpy.utils.register_class(SequenceBakeProperties)
     bpy.types.Scene.sequence_bake_props = bpy.props.PointerProperty(type=SequenceBakeProperties)
@@ -806,7 +838,8 @@ def register():
     bpy.utils.register_class(OBJECT_OT_CreateSpriteSheet)
 
 def unregister():
-    bpy.utils.unregister_class(SequencedBakePanel)
+    bpy.utils.unregister_class(SequencedBakePanel)    
+    bpy.utils.unregister_class(SpriteSheetCreatorPanel)    
     bpy.utils.unregister_class(SequencedBakeOperator)
     bpy.utils.unregister_class(SequenceBakeProperties)
     bpy.utils.unregister_class(SpriteSheetProperties)
