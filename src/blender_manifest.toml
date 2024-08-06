@@ -10,4 +10,5 @@ blender_version_min =  "4.2.0"
 license = ["SPDX:GPL-3.0-or-later"]
 copyright = ["2024 Anthony O'Connell"]
 website = "https://github.com/PurgatoryMP/Sequenced_Bake"
-permissions = ["Files"]
+[permissions]
+files = "Saving and opening image files"
