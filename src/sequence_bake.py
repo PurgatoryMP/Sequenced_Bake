@@ -15,6 +15,7 @@
 
 import bpy
 import os
+import re
 from bpy.types import (
         Operator,
         Panel,
@@ -45,14 +46,14 @@ class SequenceBakeProperties(PropertyGroup):
         description='The width of the baked image',
         default=1024, 
         min=1, 
-        max=4096
+        max=8192
     )
     sequenced_bake_height: bpy.props.IntProperty(
         name="Height",
         description='The height of the baked image',
         default=1024, 
         min=1, 
-        max=4096
+        max=8192
     )
     sequence_bake_image_format: bpy.props.EnumProperty(
         name="",
@@ -63,6 +64,11 @@ class SequenceBakeProperties(PropertyGroup):
         name="Use Alpha",
         description="Use alpha channel in the generated material maps",
         default=False
+    )
+    sequence_clear_baked_maps: bpy.props.BoolProperty(
+        name="Clear Baked Maps",
+        description="Clears the baked maps from blenders image viewer list",
+        default=True
     )
     sequenced_bake_normal: bpy.props.BoolProperty(
         name="Normal",
@@ -166,6 +172,7 @@ class SequencedBakePanel(Panel):
         col.separator()
         
         col.prop(sequence_bake_props, "sequence_is_alpha")
+        col.prop(sequence_bake_props, "sequence_clear_baked_maps")
         
         col.separator(factor=3.0, type='LINE')
         
@@ -195,6 +202,8 @@ class SequencedBakeOperator(Operator):
     bl_label = "Sequenced Bake"
     _props = None
     _cancel = False
+    object_name = ""
+    material_name = ""
     
     def modal(self, context, event):
         if event.type == 'ESC':
@@ -255,12 +264,16 @@ class SequencedBakeOperator(Operator):
 
         # Get the active object
         obj = bpy.context.active_object
+        self.object_name = obj.name
+        
         if not obj:
             self.report({'ERROR'}, "No active object selected. Please select an object and try again")
             return {'CANCELLED'}
 
         # Get the active material
         mat = obj.active_material
+        self.material_name = mat.name
+        
         if not mat:
             self.report({'ERROR'}, "No active object selected. Please select an object and try again")
             return {'CANCELLED'}
@@ -272,20 +285,29 @@ class SequencedBakeOperator(Operator):
         # RRemove the generated texture node rather than removing all the texture nodes
         def remove_generated_texture_node():
             material = bpy.context.active_object.active_material
-            if material and material.node_tree:
-                node_tree = material.node_tree
-                nodes_to_remove = []
-                for node in node_tree.nodes:
-                    if node.type == 'TEX_IMAGE':
-                        nodes_to_remove.append(node)
-                for node in nodes_to_remove:
-                    node_tree.nodes.remove(node)
-
-        # Clear any existing image textures
-        for image in bpy.data.images:
-            if image.users == 0:
-                bpy.data.images.remove(image)
-
+            try:
+                if material and material.node_tree:
+                    node_tree = material.node_tree
+                    nodes_to_remove = []
+                    for node in node_tree.nodes:
+                        if node.type == 'TEX_IMAGE':
+                            nodes_to_remove.append(node)
+                    for node in nodes_to_remove:
+                        node_tree.nodes.remove(node)
+            except Exception as err:
+                print(f"Remove Generated Image Error: {err}")
+        
+        
+         # Clear any existing image textures
+        def clear_generated_textures():
+            if(self._props.sequence_clear_baked_maps):
+                try:
+                    for image in bpy.data.images:
+                        if image.users == 0:
+                            bpy.data.images.remove(image)
+                except Exception as err:
+                    print(f"Clear Baked Maps Error: {err}")
+        # 
         def bake_maps(bake_type):
             # Call the function to remove the generated texture node
             remove_generated_texture_node()
@@ -296,9 +318,11 @@ class SequencedBakeOperator(Operator):
                 # Set the frame and update the scene
                 bpy.context.scene.frame_set(frame)
                 bpy.context.view_layer.update()
+                
+                bake_type_name = self.object_name +"_"+ self.material_name +"_"+ bake_type
 
                 # Create a new texture for the Image Texture node
-                texture = bpy.data.images.new(name=bake_type, width=image_width, height=image_height, alpha=sequence_is_alpha)
+                texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height, alpha=sequence_is_alpha)
 
                 # Create a new Image Texture node
                 image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
@@ -309,12 +333,16 @@ class SequencedBakeOperator(Operator):
 
                 # Select the new Image Texture node
                 mat.node_tree.nodes.active = image_node
+                
+                bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
                 # Bake the texture
                 bpy.ops.object.bake(type=bake_type)
+                
+                bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
                 # Define the output path
-                image_path = os.path.join(root_directory, bake_type, str(frame) + f".{sequence_bake_image_format}")
+                image_path = os.path.join(root_directory, bake_type_name, str(frame) + f".{sequence_bake_image_format}")
 
                 # Save the rendered image
                 texture.save_render(image_path)
@@ -416,9 +444,11 @@ class SequencedBakeOperator(Operator):
                 # Set the frame and update the scene
                 bpy.context.scene.frame_set(frame)
                 bpy.context.view_layer.update()
+                
+                bake_type_name = self.object_name +"_"+ self.material_name +"_METALLIC"
 
                 # Create a new texture for the Image Texture node
-                texture = bpy.data.images.new(name='METALLIC', width=image_width, height=image_height, alpha=sequence_is_alpha)
+                texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height, alpha=sequence_is_alpha)
                 
                 # Set the color space of the new texture to non color.
                 texture.colorspace_settings.name = 'Non-Color'
@@ -441,7 +471,7 @@ class SequencedBakeOperator(Operator):
                     return {"CANCELLED"}
 
                 # Define the output path
-                image_path = os.path.join(root_directory, "METALLIC", str(frame) + f".{sequence_bake_image_format}")
+                image_path = os.path.join(root_directory, bake_type_name, str(frame) + f".{sequence_bake_image_format}")
 
                 # Save the rendered image
                 texture.save_render(image_path)
@@ -460,9 +490,6 @@ class SequencedBakeOperator(Operator):
         for bake_type in bake_types:
             if self._cancel:
                 break
-            bake_directory = os.path.join(root_directory, bake_type)
-            os.makedirs(bake_directory, exist_ok=True)
-
             # Begin baking
             bake_maps(bake_type)
         
@@ -473,10 +500,8 @@ class SequencedBakeOperator(Operator):
         # Call the function to remove the generated texture node
         remove_generated_texture_node()
 
-        # Clear any existing image textures
-        for image in bpy.data.images:
-            if image.users == 0:
-                bpy.data.images.remove(image)
+        # Clear any existing image textures        
+        clear_generated_textures()
         
         self.report({'INFO'}, "Finished.")
         return {'FINISHED'}

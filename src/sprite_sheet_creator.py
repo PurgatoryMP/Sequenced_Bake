@@ -14,6 +14,7 @@
 
 import bpy
 import os
+import re
 import numpy as np
 import platform
 import subprocess
@@ -106,6 +107,11 @@ class SpriteSheetProperties(PropertyGroup):
         description="Opens the output directory of the generated sprite sheets",
         default=False
     )
+    clear_generated_images: bpy.props.BoolProperty(
+        name="Clear Generated Images",
+        description="Clears the generated images from blenders image viewer list",
+        default=True
+    )
 
 class SpriteSheetCreatorPanel(Panel):
     bl_label = "Sprite Sheet Creator"
@@ -159,6 +165,7 @@ class SpriteSheetCreatorPanel(Panel):
         col.prop(sprite_sheet_props, "sprite_sheet_is_alpha")
         col.prop(sprite_sheet_props, "open_images")
         col.prop(sprite_sheet_props, "open_output_directory")
+        col.prop(sprite_sheet_props, "clear_generated_images")
         
         col.separator(factor=3.0, type='LINE')
         
@@ -175,28 +182,46 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
     _current_index = 0
     _props = None
     _sb_props = None
+    directory_name = ""
     
     def execute(self, context):
         self._props = context.scene.sprite_sheet_props
         self._sb_props = context.scene.sequence_bake_props
-        
-        # Get the sprite sheet directory containing the sub-directorys with image sequences in them.
-        directory = bpy.path.abspath(self._props.directory)        
+
+        # Get the sprite sheet directory
+        directory = bpy.path.abspath(self._props.directory)
         if not directory:
-            self.report({'WARNING'}, f"No image sequence directory provided, Defaulting to Material Output Path.")             
+            self.report({'WARNING'}, "No image sequence directory provided, Defaulting to Material Output Path.")
             directory = bpy.path.abspath(self._sb_props.sequenced_bake_output_path)
             if not directory:
-                self.report({'ERROR'}, "A material output path was not provided.") 
+                self.report({'ERROR'}, "A material output path was not provided.")
                 return {"CANCELED"}
-        
-        self._subdirs = [os.path.join(directory, subdir) for subdir in os.listdir(directory) if os.path.isdir(os.path.join(directory, subdir))]
+
+        # Check for subdirectories
+        subdirs = [os.path.join(directory, subdir) for subdir in os.listdir(directory) if os.path.isdir(os.path.join(directory, subdir))]
+
+        if subdirs:
+            # If subdirectories are found, process them
+            self._subdirs = subdirs
+        else:
+            # If no subdirectories, check for image files in the selected directory
+            image_files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+            self.directory_name = os.path.basename(os.path.normpath(directory))
+            if image_files:
+                # Treat the directory itself as a subdirectory
+                self._subdirs = [directory]
+            else:
+                self.report({'ERROR'}, "No valid subdirectories or image sequences found in the selected directory.")
+                return {"CANCELED"}
+
         self._subdir_count = len(self._subdirs)
         self._current_index = 0
-        
+
         wm = context.window_manager
         self._timer = wm.event_timer_add(0.1, window=context.window)
         wm.modal_handler_add(self)
         return {'RUNNING_MODAL'}
+
 
     def modal(self, context, event):
         if event.type == 'ESC':
@@ -255,9 +280,38 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
             subprocess.run(["open", directory_path])
         if system == "Linux":
             subprocess.run(["xdg-open", directory_path])
+   
+    def remove_images():
+        # Get the list of all images in the Blender file
+        images = bpy.data.images
+        
+        # Regular expression pattern to match images with just a number or containing 'scaled_'
+        pattern = re.compile(r'^\d+\.png$|scaled_')
+        
+        # Iterate through the images
+        try:
+            for image in list(images):
+                if pattern.search(image.name):
+                    print(f"Removing image: {image.name}")
+                    bpy.data.images.remove(image)
+        except Exception as err:
+            print(f"remove_images: {err}")
 
     def process_subdir(self, subdir_path):
     
+        file_names = os.listdir(subdir_path)
+        
+        # Filter and delte priviously generated sprite sheets before creating another one
+        non_numeric_files = [f for f in file_names if not f.split('.')[0].isdigit()]
+        if non_numeric_files:
+            # Assuming we want to delete the first non-numeric file found
+            file_to_delete = non_numeric_files[0]
+            file_path = os.path.join(subdir_path, file_to_delete)
+        
+            # Delete the file
+            os.remove(file_path)
+        
+        # Refresh the file list after removing any generated sprite sheets.
         file_names = os.listdir(subdir_path)
     
         # Get the images from the sub-directorys.
@@ -274,10 +328,10 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         image_files_sorted = sorted(image_files, key=lambda x: int(x.split('.')[0]), reverse=is_reversed)
         
         # Debug info
-        print(f" ")
-        print(f"~~~~~~~~~~~~~~ LOADED IMAGES ~~~~~~~~~~~~~~")
-        print(f"Image File List Count: {len(image_files_sorted)}")
-        print(f"Image Files Sort Order: {image_files_sorted}")
+        # print(f" ")
+        # print(f"~~~~~~~~~~~~~~ LOADED IMAGES ~~~~~~~~~~~~~~")
+        # print(f"Image File List Count: {len(image_files_sorted)}")
+        # print(f"Image Files Sort Order: {image_files_sorted}")
 
         images = []
         for filename in image_files_sorted:
@@ -311,10 +365,15 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         sprite_sheet_image_format = self._props.sprite_sheet_image_format
         open_images = self._props.open_images
         open_output_directory = self._props.open_output_directory
+        clear_generated_images = self._props.clear_generated_images
+        
+        subdir_name = os.path.basename(subdir_path)
+        if not subdir_name:
+            subdir_name = self.directory_name
         
         # Create new sprite sheet image
         sprite_sheet = bpy.data.images.new(
-            name=f"{os.path.basename(subdir_path)}_sprite_sheet",
+            name=f"{subdir_name}_sprite_sheet",
             width=columns * image_width,
             height=rows * image_height,
             alpha=sprite_sheet_is_alpha
@@ -329,6 +388,10 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         position_index = 0
 
         for index, img in enumerate(images):
+            
+            # Add the images to the list.
+            generated_images.append(img.name)
+            
             if start_frame-1 <= index <= end_frame-1:                
                 x = (position_index % columns) * image_width
                 y = (position_index // columns) * image_height
@@ -341,6 +404,9 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
                 # Create a new image for the scaled version
                 scaled_image = bpy.data.images.new(f"scaled_{index}", width=image_width, height=image_height)
                 scaled_pixels = np.zeros((image_height, image_width, 4), dtype=np.float32)
+                
+                # Add the generated image to the list.
+                generated_images.append(scaled_image)
                 
                 # Load original image pixels
                 original_pixels = np.array(img.pixels[:], dtype=np.float32).reshape((original_height, original_width, 4))
@@ -362,33 +428,46 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
 
         # Update sprite sheet with new pixel data
         sprite_sheet.pixels = pixels.flatten()
+            
+        file_name = f"{subdir_name}_sprite_sheet{label_reversed}.{sprite_sheet_image_format}"
         
-        file_name = f"{os.path.basename(subdir_path)}_sprite_sheet{label_reversed}.{sprite_sheet_image_format}"
-                
+        print(f"File Name: {file_name}")
+        
         sprite_sheet_path = os.path.join(directory, file_name)
         
-        generated_images.append(sprite_sheet_path)
+        # generated_images.append(sprite_sheet_path)
+        
+        print(f"File Path: {sprite_sheet_path}")
         
         if os.path.exists(sprite_sheet_path):
+            print(f"Path Exists: {sprite_sheet_path}")
             os.remove(sprite_sheet_path)
         
         sprite_sheet.filepath_raw = sprite_sheet_path
         sprite_sheet.save()
         
-        for img in bpy.data.images:
-            if img.name not in generated_images:
-                bpy.data.images.remove(img)
+        # Clear the generated sprite sheets from the image list.
+        if clear_generated_images:
+            # Get the list of all images in the Blender file
+            images = bpy.data.images
+            
+            # Regular expression pattern to match images with just a number or containing 'scaled_'
+            pattern = re.compile(r'^\d+\.png(?:\.\d+)?$|scaled_')
+            for image in list(images):
+                if pattern.search(image.name):
+                    bpy.data.images.remove(image)
         
         # Open the generated sprite sheet in the image viewer
         bpy.ops.image.open(filepath=sprite_sheet_path)
         self.report({'INFO'}, f"Sprite sheet created and saved at: {sprite_sheet_path}")
                
-        # Clear the list of generated images while keeping the sprite sheets that were generated        
         if len(generated_images) == self._subdir_count:
             if open_images:
                 self.open_images(generated_images)            
+            
             if open_output_directory:
                 self.open_directory(directory)                
-            # Clear the list of image paths
+            
+            #Clear the list of image paths
             generated_images.clear()
 
