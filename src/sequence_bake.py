@@ -217,291 +217,279 @@ class SequencedBakeOperator(Operator):
         return {'PASS_THROUGH'}
 
     def execute(self, context):
+    
+        if bpy.context.scene.render.engine == 'CYCLES':
         
-        self._props = bpy.context.scene.sequence_bake_props
+            self._props = bpy.context.scene.sequence_bake_props
 
-        # Define the root directory.
-        root_directory = self._props.sequenced_bake_output_path        
-        if not root_directory:
-            self.report({'ERROR'}, "No directory provided")
-            return {'CANCELLED'}
+            # Define the root directory.
+            root_directory = self._props.sequenced_bake_output_path        
+            if not root_directory:
+                self.report({'ERROR'}, "No directory provided")
+                return {'CANCELLED'}
 
-        # Define the bake types to bake out
-        bake_types = []
-        if self._props.sequenced_bake_normal:
-            bake_types.append('NORMAL')
-        if self._props.sequenced_bake_roughness:
-            bake_types.append('ROUGHNESS')
-        if self._props.sequenced_bake_glossy:
-            bake_types.append('GLOSSY')
-        if self._props.sequenced_bake_emission:
-            bake_types.append('EMIT')
-        if self._props.sequenced_bake_ambient_occlusion:
-            bake_types.append('Ambient Occlusion')
-        if self._props.sequenced_bake_shadow:
-            bake_types.append('SHADOW')
-        if self._props.sequenced_bake_position:
-            bake_types.append('POSITION')
-        if self._props.sequenced_bake_uv:
-            bake_types.append('UV')
-        if self._props.sequenced_bake_environment:
-            bake_types.append('ENVIRONMENT')
-        if self._props.sequenced_bake_diffuse:
-            bake_types.append('DIFFUSE')
-        if self._props.sequenced_bake_transmission:
-            bake_types.append('TRANSMISSION')
-        if self._props.sequenced_bake_combined:
-            bake_types.append('COMBINED')
+            # Define the bake types to bake out
+            bake_types = []
+            if self._props.sequenced_bake_normal:
+                bake_types.append('NORMAL')
+            if self._props.sequenced_bake_roughness:
+                bake_types.append('ROUGHNESS')
+            if self._props.sequenced_bake_glossy:
+                bake_types.append('GLOSSY')
+            if self._props.sequenced_bake_emission:
+                bake_types.append('EMIT')
+            if self._props.sequenced_bake_ambient_occlusion:
+                bake_types.append('Ambient Occlusion')
+            if self._props.sequenced_bake_shadow:
+                bake_types.append('SHADOW')
+            if self._props.sequenced_bake_position:
+                bake_types.append('POSITION')
+            if self._props.sequenced_bake_uv:
+                bake_types.append('UV')
+            if self._props.sequenced_bake_environment:
+                bake_types.append('ENVIRONMENT')
+            if self._props.sequenced_bake_diffuse:
+                bake_types.append('DIFFUSE')
+            if self._props.sequenced_bake_transmission:
+                bake_types.append('TRANSMISSION')
+            if self._props.sequenced_bake_combined:
+                bake_types.append('COMBINED')
+                
+            # Get the current frame range
+            start_frame = bpy.context.scene.frame_start
+            end_frame = bpy.context.scene.frame_end        
+            frame_range = range(start_frame, end_frame + 1)
             
-        # Get the current frame range
-        start_frame = bpy.context.scene.frame_start
-        end_frame = bpy.context.scene.frame_end        
-        frame_range = range(start_frame, end_frame + 1)
-        
-        # Get property settings.
-        sequence_bake_image_format = self._props.sequence_bake_image_format        
-        sequence_is_alpha = self._props.sequence_is_alpha
+            # Get property settings.
+            sequence_bake_image_format = self._props.sequence_bake_image_format        
+            sequence_is_alpha = self._props.sequence_is_alpha
 
-        # Get the active object
-        obj = bpy.context.active_object
-        self.object_name = obj.name
-        
-        if not obj:
-            self.report({'ERROR'}, "No active object selected. Please select an object and try again")
-            return {'CANCELLED'}
-
-        # Get the active material
-        mat = obj.active_material
-        self.material_name = mat.name
-        
-        if not mat:
-            self.report({'ERROR'}, "No active object selected. Please select an object and try again")
-            return {'CANCELLED'}
-
-        # Define the image size
-        image_width = self._props.sequenced_bake_width
-        image_height = self._props.sequenced_bake_height
-
-        # RRemove the generated texture node rather than removing all the texture nodes
-        def remove_generated_texture_node():
-            material = bpy.context.active_object.active_material
-            try:
-                if material and material.node_tree:
-                    node_tree = material.node_tree
-                    nodes_to_remove = []
-                    for node in node_tree.nodes:
-                        if node.type == 'TEX_IMAGE':
-                            nodes_to_remove.append(node)
-                    for node in nodes_to_remove:
-                        node_tree.nodes.remove(node)
-            except Exception as err:
-                print(f"Remove Generated Image Error: {err}")
-        
-        
-         # Clear any existing image textures
-        def clear_generated_textures():
-            if(self._props.sequence_clear_baked_maps):
-                try:
-                    for image in bpy.data.images:
-                        if image.users == 0:
-                            bpy.data.images.remove(image)
-                except Exception as err:
-                    print(f"Clear Baked Maps Error: {err}")
-        # 
-        def bake_maps(bake_type):
-            # Call the function to remove the generated texture node
-            remove_generated_texture_node()
-
-            for frame in frame_range:
-                if self._cancel:
-                    break
-                # Set the frame and update the scene
-                bpy.context.scene.frame_set(frame)
-                bpy.context.view_layer.update()
-                
-                bake_type_name = self.object_name +"_"+ self.material_name +"_"+ bake_type
-
-                # Create a new texture for the Image Texture node
-                texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height, alpha=sequence_is_alpha)
-
-                # Create a new Image Texture node
-                image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                
-                # Set node position
-                image_node.location = (400, -200)
-                image_node.image = texture
-
-                # Select the new Image Texture node
-                mat.node_tree.nodes.active = image_node
-                
-                bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
-
-                # Bake the texture
-                bpy.ops.object.bake(type=bake_type)
-                
-                bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
-
-                # Define the output path
-                image_path = os.path.join(root_directory, bake_type_name, str(frame) + f".{sequence_bake_image_format}")
-
-                # Save the rendered image
-                texture.save_render(image_path)
-                
-                # Update the Blender interface
-                bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
-                
-        def connect_metallic_node():
+            # Get the active object
+            obj = bpy.context.active_object
+            self.object_name = obj.name
             
-            # Assuming you're working with the active object's active material
-            material = bpy.context.object.active_material
+            if not obj:
+                self.report({'ERROR'}, "No active object selected. Please select an object and try again")
+                return {'CANCELLED'}
 
-            # Check if the material has a node tree and use nodes
-            if material.use_nodes:
-                nodes = material.node_tree.nodes
-                links = material.node_tree.links
+            # Get the active material
+            mat = obj.active_material
+            self.material_name = mat.name
+            
+            if not mat:
+                self.report({'ERROR'}, "No active object selected. Please select an object and try again")
+                return {'CANCELLED'}
+
+            # Define the image size
+            image_width = self._props.sequenced_bake_width
+            image_height = self._props.sequenced_bake_height
+
+
+             # Clear any existing image textures
+            def clear_generated_textures():
+                if(self._props.sequence_clear_baked_maps):
+                    try:
+                        for image in bpy.data.images:
+                            if image.users == 0:
+                                bpy.data.images.remove(image)
+                    except Exception as err:
+                        print(f"Clear Baked Maps Error: {err}")
+            # 
+            def bake_maps(bake_type):
                 
-                # Find the Principled BSDF and Material Output nodes
-                principled_bsdf = None
-                material_output = None
-                
-                for node in nodes:
-                    if node.type == 'BSDF_PRINCIPLED':
-                        principled_bsdf = node
-                    elif node.type == 'OUTPUT_MATERIAL':
-                        material_output = node
-                
-                if principled_bsdf and material_output:
-                    # Get the input connected to the 'Metallic' socket of the Principled BSDF node
-                    metallic_input = principled_bsdf.inputs['Metallic']
+                for frame in frame_range:
+                    if self._cancel:
+                        break
+                    # Set the frame and update the scene
+                    bpy.context.scene.frame_set(frame)
+                    bpy.context.view_layer.update()
                     
-                    if metallic_input.is_linked:
-                        # Get the node connected to the Metallic input
-                        metallic_node_link = metallic_input.links[0]
-                        connected_node = metallic_node_link.from_node
-                        connected_output_socket = metallic_node_link.from_socket
+                    bake_type_name = self.object_name +"_"+ self.material_name +"_"+ bake_type
+
+                    # Create a new texture for the Image Texture node
+                    texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height, alpha=sequence_is_alpha)
+
+                    # Create a new Image Texture node
+                    image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                    
+                    # Set node position
+                    image_node.location = (400, -200)
+                    image_node.image = texture
+
+                    # Select the new Image Texture node making it the active selection.
+                    mat.node_tree.nodes.active = image_node
+                    
+                    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+
+                    # Bake the texture
+                    bpy.ops.object.bake(type=bake_type)
+                    
+                    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+
+                    # Define the output path
+                    image_path = os.path.join(root_directory, bake_type_name, str(frame) + f".{sequence_bake_image_format}")
+
+                    # Save the rendered image
+                    texture.save_render(image_path)
+                    
+                    # Update the Blender interface
+                    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+                    
+                    # Clear ONLY the generated texture nodes after the rendered image is saved.
+                    active_node = mat.node_tree.nodes.active                
+                    mat.node_tree.nodes.remove(active_node)
+                    
+            def connect_metallic_node():
+                
+                # Assuming you're working with the active object's active material
+                material = bpy.context.object.active_material
+
+                # Check if the material has a node tree and use nodes
+                if material.use_nodes:
+                    nodes = material.node_tree.nodes
+                    links = material.node_tree.links
+                    
+                    # Find the Principled BSDF and Material Output nodes
+                    principled_bsdf = None
+                    material_output = None
+                    
+                    for node in nodes:
+                        if node.type == 'BSDF_PRINCIPLED':
+                            principled_bsdf = node
+                        elif node.type == 'OUTPUT_MATERIAL':
+                            material_output = node
+                    
+                    if principled_bsdf and material_output:
+                        # Get the input connected to the 'Metallic' socket of the Principled BSDF node
+                        metallic_input = principled_bsdf.inputs['Metallic']
                         
-                        # Connect it to the Surface input of the Material Output node
-                        surface_input = material_output.inputs['Surface']
-                        links.new(connected_output_socket, surface_input)
-                                
+                        if metallic_input.is_linked:
+                            # Get the node connected to the Metallic input
+                            metallic_node_link = metallic_input.links[0]
+                            connected_node = metallic_node_link.from_node
+                            connected_output_socket = metallic_node_link.from_socket
+                            
+                            # Connect it to the Surface input of the Material Output node
+                            surface_input = material_output.inputs['Surface']
+                            links.new(connected_output_socket, surface_input)
+                                    
+                        else:
+                            self.report({'WARNING'}, "The Metallic input is not connected to any node")
                     else:
-                        self.report({'WARNING'}, "The Metallic input is not connected to any node")
+                        self.report({'WARNING'}, "Principled BSDF or Material Output node not found")
                 else:
-                    self.report({'WARNING'}, "Principled BSDF or Material Output node not found")
-            else:
-                self.report({'WARNING'}, "The material does not use nodes")                
-        
-        def reconnect_node():
+                    self.report({'WARNING'}, "The material does not use nodes")                
             
-            # Reconnects the Pricipled BSDF node to the material output node.
-            # Get the active object's active material
-            material = bpy.context.object.active_material
+            def reconnect_node():
+                
+                # Reconnects the Pricipled BSDF node to the material output node.
+                # Get the active object's active material
+                material = bpy.context.object.active_material
 
-            # Check if the material has a node tree
-            if material.use_nodes:
-                nodes = material.node_tree.nodes
-                links = material.node_tree.links
-                
-                # Find the Principled BSDF and Material Output nodes
-                principled_bsdf = None
-                material_output = None
-                
-                for node in nodes:
-                    if node.type == 'BSDF_PRINCIPLED':
-                        principled_bsdf = node
-                    elif node.type == 'OUTPUT_MATERIAL':
-                        material_output = node
-                
-                if principled_bsdf and material_output:
-                    # Find the Surface input of the Material Output node
-                    surface_input = material_output.inputs['Surface']
+                # Check if the material has a node tree
+                if material.use_nodes:
+                    nodes = material.node_tree.nodes
+                    links = material.node_tree.links
                     
-                    # Disconnect any existing connections to the Surface input
-                    for link in surface_input.links:
-                        links.remove(link)
+                    # Find the Principled BSDF and Material Output nodes
+                    principled_bsdf = None
+                    material_output = None
                     
-                    # Connect the Principled BSDF node's output to the Surface input
-                    bsdf_output_socket = principled_bsdf.outputs['BSDF']
-                    links.new(bsdf_output_socket, surface_input)
+                    for node in nodes:
+                        if node.type == 'BSDF_PRINCIPLED':
+                            principled_bsdf = node
+                        elif node.type == 'OUTPUT_MATERIAL':
+                            material_output = node
                     
-                    self.report({'INFO'}, "Reconnected Principled BSDF to Material Output")
+                    if principled_bsdf and material_output:
+                        # Find the Surface input of the Material Output node
+                        surface_input = material_output.inputs['Surface']
+                        
+                        # Disconnect any existing connections to the Surface input
+                        for link in surface_input.links:
+                            links.remove(link)
+                        
+                        # Connect the Principled BSDF node's output to the Surface input
+                        bsdf_output_socket = principled_bsdf.outputs['BSDF']
+                        links.new(bsdf_output_socket, surface_input)
+                        
+                        self.report({'INFO'}, "Reconnected Principled BSDF to Material Output")
+                    else:
+                        self.report({'WARNING'}, "Principled BSDF or Material Output node not found")
                 else:
-                    self.report({'WARNING'}, "Principled BSDF or Material Output node not found")
-            else:
-                self.report({'WARNING'}, "The material does not use nodes")
+                    self.report({'WARNING'}, "The material does not use nodes")
 
-        def bake_metallic():
+            def bake_metallic():
+                
+                # Disconnect the node connected to the metallic input of the Pricipaled BSDF and connect it directly to the material output node.
+                connect_metallic_node()
+                
+                for frame in frame_range:
+                    if self._cancel:
+                        break
+                    # Set the frame and update the scene
+                    bpy.context.scene.frame_set(frame)
+                    bpy.context.view_layer.update()
+                    
+                    bake_type_name = self.object_name +"_"+ self.material_name +"_METALLIC"
+
+                    # Create a new texture for the Image Texture node
+                    texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height, alpha=sequence_is_alpha)
+                                        
+                    # Set the color space of the new texture to non color.
+                    texture.colorspace_settings.name = 'Non-Color'
+
+                    # Create a new Image Texture node
+                    image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                    
+                    # Set node position
+                    image_node.location = (400, -200)
+                    image_node.image = texture
+
+                    # Select the new Image Texture node
+                    mat.node_tree.nodes.active = image_node
+                    
+                    # Bake the texture
+                    try:
+                        bpy.ops.object.bake(type='EMIT')
+                    except Exception as error:
+                        self.report({'ERROR'}, "No active object was selected. Please select an object and try again.")
+                        return {"CANCELLED"}
+
+                    # Define the output path
+                    image_path = os.path.join(root_directory, bake_type_name, str(frame) + f".{sequence_bake_image_format}")
+
+                    # Save the rendered image
+                    texture.save_render(image_path)
+                    
+                    # Update the Blender interface
+                    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+                
+                # Reconnect the pricipled BSDF node to the material output node.
+                reconnect_node()    
             
-            # Disconnect the node connected to the metallic input of the Pricipaled BSDF and connect it directly to the material output node.
-            connect_metallic_node()
-            
-            # Clear existing any texture nodes.
-            remove_generated_texture_node()
-            
-            for frame in frame_range:
+            def invoke(self, context, event):
+                self._cancel = False
+                return self.execute(context)
+
+            # Start baking the different material map sequences
+            for bake_type in bake_types:
                 if self._cancel:
                     break
-                # Set the frame and update the scene
-                bpy.context.scene.frame_set(frame)
-                bpy.context.view_layer.update()
-                
-                bake_type_name = self.object_name +"_"+ self.material_name +"_METALLIC"
-
-                # Create a new texture for the Image Texture node
-                texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height, alpha=sequence_is_alpha)
-                
-                # Set the color space of the new texture to non color.
-                texture.colorspace_settings.name = 'Non-Color'
-
-                # Create a new Image Texture node
-                image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                
-                # Set node position
-                image_node.location = (400, -200)
-                image_node.image = texture
-
-                # Select the new Image Texture node
-                mat.node_tree.nodes.active = image_node
-                
-                # Bake the texture
-                try:
-                    bpy.ops.object.bake(type='EMIT')
-                except Exception as error:
-                    self.report({'ERROR'}, "No active object was selected. Please select an object and try again.")
-                    return {"CANCELLED"}
-
-                # Define the output path
-                image_path = os.path.join(root_directory, bake_type_name, str(frame) + f".{sequence_bake_image_format}")
-
-                # Save the rendered image
-                texture.save_render(image_path)
-                
-                # Update the Blender interface
-                bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+                # Begin baking
+                bake_maps(bake_type)
             
-            # Reconnect the pricipled BSDF node to the material output node.
-            reconnect_node()    
+            # Metallic Map generation.
+            if self._props.sequenced_bake_metallic:
+                # Begin baking
+                bake_metallic()
+            
+            # Clear any existing image textures        
+            clear_generated_textures()
+            
+            self.report({'INFO'}, "Finished.")
+            return {'FINISHED'}
         
-        def invoke(self, context, event):
-            self._cancel = False
-            return self.execute(context)
-
-        # Start baking the different material map sequences
-        for bake_type in bake_types:
-            if self._cancel:
-                break
-            # Begin baking
-            bake_maps(bake_type)
-        
-        # Metallic Map generation.
-        if self._props.sequenced_bake_metallic:
-            bake_metallic()
-        
-        # Call the function to remove the generated texture node
-        remove_generated_texture_node()
-
-        # Clear any existing image textures        
-        clear_generated_textures()
-        
-        self.report({'INFO'}, "Finished.")
-        return {'FINISHED'}
+        else:
+            self.report({'WARNING'}, "Render engine is not set to Cycles.\nPlease switch to Cycles under the rendering tab and try again.")
+            return {'FINISHED'}
