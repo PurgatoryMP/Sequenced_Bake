@@ -16,7 +16,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 0, 6),
+    "version": (1, 0, 7),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",

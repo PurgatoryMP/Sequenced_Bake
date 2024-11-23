@@ -148,7 +148,6 @@ class SequencedBakePanel(Panel):
         layout = self.layout        
         scene = context.scene
         sequence_bake_props = scene.sequence_bake_props
-        sprite_sheet_props = scene.sprite_sheet_props
 
         # Output Path
         box = layout.box()
@@ -175,7 +174,7 @@ class SequencedBakePanel(Panel):
         col.prop(sequence_bake_props, "sequence_clear_baked_maps")
         
         col.separator(factor=3.0, type='LINE')
-        
+                
         # Bake Type Options
         col.label(text="Bake Type Options:")
         col.prop(sequence_bake_props, "sequenced_bake_normal")
@@ -195,33 +194,21 @@ class SequencedBakePanel(Panel):
         col.separator(factor=3.0, type='LINE')
         
         # Baking Button
-        col.operator("sequenced_bake.bake", text="Bake Material Sequence")  
+        col.operator("sequenced_bake.bake", text="Bake Material Sequence")
 
 class SequencedBakeOperator(Operator):
     bl_idname = "sequenced_bake.bake"
     bl_label = "Sequenced Bake"
     _props = None
-    _cancel = False
     object_name = ""
     material_name = ""
     
-    def modal(self, context, event):
-        if event.type == 'ESC':
-            self._cancel = True
-            self.report({'INFO'}, "Baking cancelled by user")
-            return {'CANCELLED'}
-
-        if self._cancel:
-            return {'CANCELLED'}
-
-        return {'PASS_THROUGH'}
-
     def execute(self, context):
     
         if bpy.context.scene.render.engine == 'CYCLES':
-        
+            
             self._props = bpy.context.scene.sequence_bake_props
-
+            
             # Define the root directory.
             root_directory = self._props.sequenced_bake_output_path        
             if not root_directory:
@@ -255,9 +242,9 @@ class SequencedBakeOperator(Operator):
             if self._props.sequenced_bake_combined:
                 bake_types.append('COMBINED')
                 
-            # Get the current frame range
+            # Get the current frame range            
             start_frame = bpy.context.scene.frame_start
-            end_frame = bpy.context.scene.frame_end        
+            end_frame = bpy.context.scene.frame_end            
             frame_range = range(start_frame, end_frame + 1)
             
             # Get property settings.
@@ -284,7 +271,6 @@ class SequencedBakeOperator(Operator):
             image_width = self._props.sequenced_bake_width
             image_height = self._props.sequenced_bake_height
 
-
              # Clear any existing image textures
             def clear_generated_textures():
                 if(self._props.sequence_clear_baked_maps):
@@ -293,13 +279,12 @@ class SequencedBakeOperator(Operator):
                             if image.users == 0:
                                 bpy.data.images.remove(image)
                     except Exception as err:
-                        print(f"Clear Baked Maps Error: {err}")
+                        self.report({'ERROR'}, f"Problem with clearing baked maps: {err}")
             # 
             def bake_maps(bake_type):
                 
                 for frame in frame_range:
-                    if self._cancel:
-                        break
+                    
                     # Set the frame and update the scene
                     bpy.context.scene.frame_set(frame)
                     bpy.context.view_layer.update()
@@ -312,8 +297,22 @@ class SequencedBakeOperator(Operator):
                     # Create a new Image Texture node
                     image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
                     
-                    # Set node position
-                    image_node.location = (400, -200)
+                    # Get the position of the material output node.
+                    material_output_node = None
+                    for node in mat.node_tree.nodes:
+                        if node.type == 'OUTPUT_MATERIAL':
+                            material_output_node = node
+                            break
+                    
+                    if material_output_node:
+                        material_output_position = material_output_node.location
+                    else:
+                        # Default if Material Output node isn't found
+                        self.report({'ERROR'}, "Material Output node was not found, Please add your material output node and try again.")
+                        return {'CANCELLED'}                    
+                    
+                    # Set node position to the right of the material output node.
+                    image_node.location = (material_output_position.x + 250, material_output_position.y)
                     image_node.image = texture
 
                     # Select the new Image Texture node making it the active selection.
@@ -425,8 +424,7 @@ class SequencedBakeOperator(Operator):
                 connect_metallic_node()
                 
                 for frame in frame_range:
-                    if self._cancel:
-                        break
+                    
                     # Set the frame and update the scene
                     bpy.context.scene.frame_set(frame)
                     bpy.context.view_layer.update()
@@ -467,25 +465,24 @@ class SequencedBakeOperator(Operator):
                 
                 # Reconnect the pricipled BSDF node to the material output node.
                 reconnect_node()    
+                        
+            if bake_types:            
+                # Start baking the different material map sequences
+                for bake_type in bake_types:
+                    # Begin baking
+                    bake_maps(bake_type)
+                
+                # Metallic Map generation.
+                if self._props.sequenced_bake_metallic:
+                    # Begin baking
+                    bake_metallic()
+                
+                # Clear any existing image textures        
+                clear_generated_textures()
             
-            def invoke(self, context, event):
-                self._cancel = False
-                return self.execute(context)
-
-            # Start baking the different material map sequences
-            for bake_type in bake_types:
-                if self._cancel:
-                    break
-                # Begin baking
-                bake_maps(bake_type)
-            
-            # Metallic Map generation.
-            if self._props.sequenced_bake_metallic:
-                # Begin baking
-                bake_metallic()
-            
-            # Clear any existing image textures        
-            clear_generated_textures()
+            else:
+                self.report({'WARNING'}, "No bake types have been selected, Please choose a bake type and try again.")
+                return {"CANCELLED"}
             
             self.report({'INFO'}, "Finished.")
             return {'FINISHED'}
