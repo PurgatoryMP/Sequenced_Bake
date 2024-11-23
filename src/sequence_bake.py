@@ -28,7 +28,7 @@ image_formats = [
     ("BMP", "BMP", "Save as BMP"),
     ("TIFF", "TIFF", "Save as TIFF"),
     ("TGA", "TGA", "Save as TGA"),
-    ("OPEN_EXR", "OpenEXR", "Save as OpenEXR"),
+    ("EXR", "OpenEXR", "Save as OpenEXR"),
     ("HDR", "Radiance HDR", "Save as Radiance HDR"),
     ("CINEON", "Cineon", "Save as Cineon"),
     ("DPX", "DPX", "Save as DPX")
