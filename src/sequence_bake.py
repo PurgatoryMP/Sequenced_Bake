@@ -241,6 +241,8 @@ class SequencedBakeOperator(Operator):
                 bake_types.append('TRANSMISSION')
             if self._props.sequenced_bake_combined:
                 bake_types.append('COMBINED')
+            if self._props.sequenced_bake_metallic:
+                bake_types.append('METALLIC')
                 
             # Get the current frame range            
             start_frame = bpy.context.scene.frame_start
@@ -282,6 +284,10 @@ class SequencedBakeOperator(Operator):
                         self.report({'ERROR'}, f"Problem with clearing baked maps: {err}")
             # 
             def bake_maps(bake_type):
+            
+                if bake_type == "METALLIC":
+                    # Disconnect the node connected to the metallic input of the Pricipaled BSDF and connect it directly to the material output node.
+                    connect_metallic_node()
                 
                 for frame in frame_range:
                     
@@ -293,6 +299,11 @@ class SequencedBakeOperator(Operator):
 
                     # Create a new texture for the Image Texture node
                     texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height, alpha=sequence_is_alpha)
+                    
+                    
+                    # Set the color space of the new texture to non color for metallic map.
+                    if bake_type == "METALLIC":
+                        texture.colorspace_settings.name = 'Non-Color'
 
                     # Create a new Image Texture node
                     image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
@@ -321,7 +332,21 @@ class SequencedBakeOperator(Operator):
                     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
                     # Bake the texture
-                    bpy.ops.object.bake(type=bake_type)
+                    if bake_type == "METALLIC":
+                        # Bake the texture
+                        try:
+                            bpy.ops.object.bake(type='EMIT')
+                        except Exception as error:
+                            self.report({'ERROR'}, f"There was an error while attempting to bake the EMIT map for the metallic texture. Error: {error.args}")
+                            return {"CANCELLED"}
+                    
+                    else:
+                        # Bake standard maps.
+                        try:
+                            bpy.ops.object.bake(type=bake_type)
+                        except Exception as error:
+                            self.report({'ERROR'}, f"There was an error while attempting to bake the {bake_type} map. Error: {error.args}")
+                            return {"CANCELLED"}
                     
                     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
@@ -337,6 +362,10 @@ class SequencedBakeOperator(Operator):
                     # Clear ONLY the generated texture nodes after the rendered image is saved.
                     active_node = mat.node_tree.nodes.active                
                     mat.node_tree.nodes.remove(active_node)
+                    
+                # Reconnect the pricipled BSDF node to the material output node.
+                if bake_type == "METALLIC":
+                    reconnect_node()  
                     
             def connect_metallic_node():
                 
@@ -417,66 +446,14 @@ class SequencedBakeOperator(Operator):
                         self.report({'WARNING'}, "Principled BSDF or Material Output node not found")
                 else:
                     self.report({'WARNING'}, "The material does not use nodes")
-
-            def bake_metallic():
-                
-                # Disconnect the node connected to the metallic input of the Pricipaled BSDF and connect it directly to the material output node.
-                connect_metallic_node()
-                
-                for frame in frame_range:
-                    
-                    # Set the frame and update the scene
-                    bpy.context.scene.frame_set(frame)
-                    bpy.context.view_layer.update()
-                    
-                    bake_type_name = self.object_name +"_"+ self.material_name +"_METALLIC"
-
-                    # Create a new texture for the Image Texture node
-                    texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height, alpha=sequence_is_alpha)
-                                        
-                    # Set the color space of the new texture to non color.
-                    texture.colorspace_settings.name = 'Non-Color'
-
-                    # Create a new Image Texture node
-                    image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                    
-                    # Set node position
-                    image_node.location = (400, -200)
-                    image_node.image = texture
-
-                    # Select the new Image Texture node
-                    mat.node_tree.nodes.active = image_node
-                    
-                    # Bake the texture
-                    try:
-                        bpy.ops.object.bake(type='EMIT')
-                    except Exception as error:
-                        self.report({'ERROR'}, "No active object was selected. Please select an object and try again.")
-                        return {"CANCELLED"}
-
-                    # Define the output path
-                    image_path = os.path.join(root_directory, bake_type_name, str(frame) + f".{sequence_bake_image_format}")
-
-                    # Save the rendered image
-                    texture.save_render(image_path)
-                    
-                    # Update the Blender interface
-                    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
-                
-                # Reconnect the pricipled BSDF node to the material output node.
-                reconnect_node()    
+  
                         
             if bake_types:            
                 # Start baking the different material map sequences
                 for bake_type in bake_types:
                     # Begin baking
                     bake_maps(bake_type)
-                
-                # Metallic Map generation.
-                if self._props.sequenced_bake_metallic:
-                    # Begin baking
-                    bake_metallic()
-                
+                    
                 # Clear any existing image textures        
                 clear_generated_textures()
             
