@@ -295,7 +295,7 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
                     print(f"Removing image: {image.name}")
                     bpy.data.images.remove(image)
         except Exception as err:
-            print(f"remove_images: {err}")
+            self.report({'INFO'}, f"remove_images: {err}")
 
     def process_subdir(self, subdir_path):
     
@@ -431,16 +431,16 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
             
         file_name = f"{subdir_name}_sprite_sheet{label_reversed}.{sprite_sheet_image_format}"
         
-        print(f"File Name: {file_name}")
+        self.report({'INFO'}, f"File Name: {file_name}")
         
         sprite_sheet_path = os.path.join(directory, file_name)
         
         # generated_images.append(sprite_sheet_path)
         
-        print(f"File Path: {sprite_sheet_path}")
+        self.report({'INFO'}, f"File Path: {sprite_sheet_path}")
         
         if os.path.exists(sprite_sheet_path):
-            print(f"Path Exists: {sprite_sheet_path}")
+            self.report({'INFO'}, f"Path Exists: {sprite_sheet_path}")
             os.remove(sprite_sheet_path)
         
         sprite_sheet.filepath_raw = sprite_sheet_path
