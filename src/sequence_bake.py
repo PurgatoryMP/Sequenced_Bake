@@ -234,6 +234,41 @@ class SequenceBakeProperties(PropertyGroup):
         name="Color",
         description="Include color lighting contributions in the bake",
         default=True
+    )    
+    combined_lighting_direct: bpy.props.BoolProperty(
+        name="Direct",
+        description="Include direct lighting in the bake",
+        default=True
+    )    
+    combined_lighting_indirect: bpy.props.BoolProperty(
+        name="Indirect",
+        description="Include indirect lighting in the bake",
+        default=True
+    )    
+    combined_lighting_color: bpy.props.BoolProperty(
+        name="Color",
+        description="Include color lighting contributions in the bake",
+        default=True
+    )    
+    combined_contribution_deffuse: bpy.props.BoolProperty(
+        name="Diffuse",
+        description="Include diffuse contributions in the bake",
+        default=True
+    )
+    combined_contribution_glossy: bpy.props.BoolProperty(
+        name="Glossy",
+        description="Include glossy contributions in the bake",
+        default=True
+    )
+    combined_contribution_transmission: bpy.props.BoolProperty(
+        name="Transmission",
+        description="Include transmission contributions in the bake",
+        default=True
+    )
+    combined_contribution_emit: bpy.props.BoolProperty(
+        name="Emit",
+        description="Include emission contributions in the bake",
+        default=True
     )
     
     # Color Management options.
@@ -371,6 +406,35 @@ class SequenceBakeProperties(PropertyGroup):
         default='Repeat',
     )
     
+    colorspace: bpy.props.EnumProperty(
+        name="Color Space",
+        description="Set the color space of the texture",
+        items=[
+            ('ACES2065-1', 'ACES2065-1', ''),
+            ('ACEScg', 'ACEScg', ''),
+            ('AgX Base_Display_P3', 'AgX Base Display P3', ''),
+            ('AgX Base_Rec_1886', 'AgX Base Rec.1886', ''),
+            ('AgX Base_Rec_2020', 'AgX Base Rec.2020', ''),
+            ('AgX Base_sRGB', 'AgX Base sRGB', ''),
+            ('AgX Log', 'AgX Log', ''),
+            ('Display P3', 'Display P3', ''),
+            ('Filmic Log', 'Filmic Log', ''),
+            ('Filmic sRGB', 'Filmic sRGB', ''),
+            ('Khronos PBR Neutral sRGB', 'Khronos PBR Neutral sRGB', ''),
+            ('Linear CIE XYZ D65', 'Linear CIE-XYZ D65', ''),
+            ('Linear CIE XYZ E', 'Linear CIE-XYZ E', ''),
+            ('Linear DCI P3 D65', 'Linear DCI-P3 D65', ''),
+            ('Linear FilmLight E Gamut', 'Linear FilmLight E-Gamut', ''),
+            ('Linear Rec.2020', 'Linear Rec.2020', ''),
+            ('Linear Rec.709', 'Linear Rec.709', ''),
+            ('Non-Color', 'Non-Color', ''),
+            ('Rec.1886', 'Rec.1886', ''),
+            ('Rec.2020', 'Rec.2020', ''),
+            ('sRGB', 'sRGB', '')
+        ],
+        default='sRGB',
+    )
+    
 
 
 
@@ -418,6 +482,7 @@ class SequencedBakePanel(Panel):
         col.prop(sequence_bake_props, "interpolation")
         col.prop(sequence_bake_props, "projection")
         col.prop(sequence_bake_props, "extension")
+        col.prop(sequence_bake_props, "colorspace")
         
         col.separator(factor=3.0, type='LINE')
                 
@@ -514,11 +579,27 @@ class SequencedBakePanel(Panel):
             
             row = col.row()
             row.separator(factor=option_padding)
-            row.prop(sequence_bake_props, "lighting_direct", text="Direct")
+            row.prop(sequence_bake_props, "combined_lighting_direct", text="Direct")
             
             row = col.row()
             row.separator(factor=option_padding)
-            row.prop(sequence_bake_props, "lighting_indirect", text="Indirect")
+            row.prop(sequence_bake_props, "combined_lighting_indirect", text="Indirect")
+            
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "combined_contribution_deffuse", text="Diffuse")
+            
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "combined_contribution_glossy", text="Glossy")
+            
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "combined_contribution_transmission", text="Transmission")
+            
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "combined_contribution_emit", text="Emit")
         
         col.prop(sequence_bake_props, "sequenced_bake_metallic")
         
@@ -641,11 +722,9 @@ class SequencedBakeOperator(Operator):
                     # Create a new texture for the Image Texture node
                     texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height, alpha=sequence_is_alpha)
                     
+                    # Texture color space.
+                    texture.colorspace_settings.name = self._props.colorspace
                     
-                    # Set the color space of the new texture to non color for metallic map.
-                    if bake_type == "METALLIC":
-                        texture.colorspace_settings.name = 'Non-Color'
-
                     # Create a new Image Texture node
                     image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
                     
@@ -708,7 +787,16 @@ class SequencedBakeOperator(Operator):
                     # elif bake_type == "POSITION":
                     # elif bake_type == "UV":
                     # elif bake_type == "ENVIRONMENT":
-                    # elif bake_type == "COMBINED":
+                    
+                    elif bake_type == "COMBINED":
+                        bpy.context.scene.render.bake.use_pass_direct = self._props.combined_lighting_direct
+                        bpy.context.scene.render.bake.use_pass_indirect = self._props.combined_lighting_indirect
+                        bpy.context.scene.render.bake.use_pass_color = self._props.combined_lighting_color                        
+                        bpy.context.scene.render.bake.use_pass_diffuse = self._props.combined_contribution_deffuse
+                        bpy.context.scene.render.bake.use_pass_glossy = self._props.combined_contribution_glossy
+                        bpy.context.scene.render.bake.use_pass_transmission = self._props.combined_contribution_transmission
+                        bpy.context.scene.render.bake.use_pass_emit = self._props.combined_contribution_emit
+                    
                     # elif bake_type == "METALLIC":
                     
                     # Color Management options.                    
