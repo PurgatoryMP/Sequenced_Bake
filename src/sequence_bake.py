@@ -22,18 +22,6 @@ from bpy.types import (
     PropertyGroup,
 )
 
-image_formats = [
-    ("PNG", "PNG", "Save as PNG"),
-    ("JPEG", "JPEG", "Save as JPEG"),
-    ("BMP", "BMP", "Save as BMP"),
-    ("TIFF", "TIFF", "Save as TIFF"),
-    ("TGA", "TGA", "Save as TGA"),
-    ("EXR", "OpenEXR", "Save as OpenEXR"),
-    ("HDR", "Radiance HDR", "Save as Radiance HDR"),
-    ("CINEON", "Cineon", "Save as Cineon"),
-    ("DPX", "DPX", "Save as DPX")
-]
-
 
 class SequenceBakeProperties(PropertyGroup):
     sequenced_bake_output_path: bpy.props.StringProperty(
@@ -59,7 +47,18 @@ class SequenceBakeProperties(PropertyGroup):
     sequence_bake_image_format: bpy.props.EnumProperty(
         name="",
         description="Choose the image format",
-        items=image_formats
+        items=[
+            ("PNG", "PNG", "Save as PNG"),
+            ("JPEG", "JPEG", "Save as JPEG"),
+            ("BMP", "BMP", "Save as BMP"),
+            ("TIFF", "TIFF", "Save as TIFF"),
+            ("TGA", "TGA", "Save as TGA"),
+            ("EXR", "OpenEXR", "Save as OpenEXR"),
+            ("HDR", "Radiance HDR", "Save as Radiance HDR"),
+            ("CINEON", "Cineon", "Save as Cineon"),
+            ("DPX", "DPX", "Save as DPX")
+        ],
+        default="PNG"
     )
     sequence_is_alpha: bpy.props.BoolProperty(
         name="Use Alpha",
@@ -87,7 +86,6 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default='TANGENT'
     )
-
     normal_map_red_channel: bpy.props.EnumProperty(
         name="R",
         description="Swizzle for the R channel",
@@ -101,7 +99,6 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default="POS_X"
     )
-
     normal_map_green_channel: bpy.props.EnumProperty(
         name="G",
         description="Swizzle for the G channel",
@@ -115,7 +112,6 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default="POS_Y"
     )
-
     normal_map_blue_channel: bpy.props.EnumProperty(
         name="B",
         description="Swizzle for the B channel",
@@ -273,7 +269,6 @@ class SequenceBakeProperties(PropertyGroup):
     )
 
     # Color Management options.
-
     # Display Device
     display_device: bpy.props.EnumProperty(
         name="Display Device",
@@ -286,7 +281,7 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default='sRGB'
     )
-
+    
     # View Transform
     view_transform: bpy.props.EnumProperty(
         name="View Transform",
@@ -302,7 +297,7 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default='AgX'
     )
-
+    
     # Look
     look: bpy.props.EnumProperty(
         name="Look",
@@ -321,7 +316,6 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default='None'
     )
-
     # Exposure
     exposure: bpy.props.FloatProperty(
         name="Exposure",
@@ -330,7 +324,7 @@ class SequenceBakeProperties(PropertyGroup):
         min=-10.0,
         max=10.0
     )
-
+    
     # Gamma
     gamma: bpy.props.FloatProperty(
         name="Gamma",
@@ -339,7 +333,7 @@ class SequenceBakeProperties(PropertyGroup):
         min=0.0,
         max=5.0
     )
-
+    
     # Sequencer
     sequencer: bpy.props.EnumProperty(
         name="Sequencer",
@@ -380,9 +374,8 @@ class SequenceBakeProperties(PropertyGroup):
             ('Cubic', "Cubic", "Use cubic interpolation"),
             ('Smart', "Smart", "Use smart interpolation"),
         ],
-        default='Linear',
+        default='Linear'
     )
-
     projection: bpy.props.EnumProperty(
         name="Projection",
         description="Set the texture projection method",
@@ -392,9 +385,8 @@ class SequenceBakeProperties(PropertyGroup):
             ('Square', "Square", "Square projection"),
             ('Tube', "Tube", "Tube projection"),
         ],
-        default='Flat',
+        default='Flat'
     )
-
     extension: bpy.props.EnumProperty(
         name="Extension",
         description="Set the texture extension method",
@@ -404,9 +396,8 @@ class SequenceBakeProperties(PropertyGroup):
             ('Clip', "Clip", "Clip the texture to the image bounds"),
             ('Mirror', "Mirror", "Mirror the texture"),
         ],
-        default='Repeat',
+        default='Repeat'
     )
-
     colorspace: bpy.props.EnumProperty(
         name="Color Space",
         description="Set the color space of the texture",
@@ -433,7 +424,7 @@ class SequenceBakeProperties(PropertyGroup):
             ('Rec.2020', 'Rec.2020', ''),
             ('sRGB', 'sRGB', '')
         ],
-        default='sRGB',
+        default='sRGB'
     )
 
 
