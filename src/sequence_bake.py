@@ -17,10 +17,10 @@ import bpy
 import os
 import re
 from bpy.types import (
-        Operator,
-        Panel,
-        PropertyGroup,
-        )
+    Operator,
+    Panel,
+    PropertyGroup,
+)
 
 image_formats = [
     ("PNG", "PNG", "Save as PNG"),
@@ -34,6 +34,7 @@ image_formats = [
     ("DPX", "DPX", "Save as DPX")
 ]
 
+
 class SequenceBakeProperties(PropertyGroup):
     sequenced_bake_output_path: bpy.props.StringProperty(
         name="",
@@ -42,17 +43,17 @@ class SequenceBakeProperties(PropertyGroup):
         description='Define the output path for the rendered images'
     )
     sequenced_bake_width: bpy.props.IntProperty(
-        name="Width", 
+        name="Width",
         description='The width of the baked image',
-        default=1024, 
-        min=1, 
+        default=1024,
+        min=1,
         max=8192
     )
     sequenced_bake_height: bpy.props.IntProperty(
         name="Height",
         description='The height of the baked image',
-        default=1024, 
-        min=1, 
+        default=1024,
+        min=1,
         max=8192
     )
     sequence_bake_image_format: bpy.props.EnumProperty(
@@ -75,7 +76,7 @@ class SequenceBakeProperties(PropertyGroup):
         description='Enable to bake the normal map for the selected objects active material',
         default=False
     )
-    
+
     # Normal map options.
     normal_map_space: bpy.props.EnumProperty(
         name="Space",
@@ -86,7 +87,7 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default='TANGENT'
     )
-    
+
     normal_map_red_channel: bpy.props.EnumProperty(
         name="R",
         description="Swizzle for the R channel",
@@ -100,7 +101,7 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default="POS_X"
     )
-    
+
     normal_map_green_channel: bpy.props.EnumProperty(
         name="G",
         description="Swizzle for the G channel",
@@ -114,7 +115,7 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default="POS_Y"
     )
-    
+
     normal_map_blue_channel: bpy.props.EnumProperty(
         name="B",
         description="Swizzle for the B channel",
@@ -188,18 +189,18 @@ class SequenceBakeProperties(PropertyGroup):
         description='Enable to bake the metallic map for the selected objects active material',
         default=False
     )
-    
+
     # Lighting options.
     diffuse_lighting_direct: bpy.props.BoolProperty(
         name="Direct",
         description="Include direct lighting in the bake",
         default=True
-    )    
+    )
     diffuse_lighting_indirect: bpy.props.BoolProperty(
         name="Indirect",
         description="Include indirect lighting in the bake",
         default=True
-    )    
+    )
     diffuse_lighting_color: bpy.props.BoolProperty(
         name="Color",
         description="Include color lighting contributions in the bake",
@@ -209,47 +210,47 @@ class SequenceBakeProperties(PropertyGroup):
         name="Direct",
         description="Include direct lighting in the bake",
         default=True
-    )    
+    )
     glossy_lighting_indirect: bpy.props.BoolProperty(
         name="Indirect",
         description="Include indirect lighting in the bake",
         default=True
-    )    
+    )
     glossy_lighting_color: bpy.props.BoolProperty(
         name="Color",
         description="Include color lighting contributions in the bake",
         default=True
-    )    
+    )
     transmission_lighting_direct: bpy.props.BoolProperty(
         name="Direct",
         description="Include direct lighting in the bake",
         default=True
-    )    
+    )
     transmission_lighting_indirect: bpy.props.BoolProperty(
         name="Indirect",
         description="Include indirect lighting in the bake",
         default=True
-    )    
+    )
     transmission_lighting_color: bpy.props.BoolProperty(
         name="Color",
         description="Include color lighting contributions in the bake",
         default=True
-    )    
+    )
     combined_lighting_direct: bpy.props.BoolProperty(
         name="Direct",
         description="Include direct lighting in the bake",
         default=True
-    )    
+    )
     combined_lighting_indirect: bpy.props.BoolProperty(
         name="Indirect",
         description="Include indirect lighting in the bake",
         default=True
-    )    
+    )
     combined_lighting_color: bpy.props.BoolProperty(
         name="Color",
         description="Include color lighting contributions in the bake",
         default=True
-    )    
+    )
     combined_contribution_deffuse: bpy.props.BoolProperty(
         name="Diffuse",
         description="Include diffuse contributions in the bake",
@@ -270,9 +271,9 @@ class SequenceBakeProperties(PropertyGroup):
         description="Include emission contributions in the bake",
         default=True
     )
-    
+
     # Color Management options.
-    
+
     # Display Device
     display_device: bpy.props.EnumProperty(
         name="Display Device",
@@ -368,7 +369,7 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default='sRGB'
     )
-    
+
     # Image texture settings.
     interpolation: bpy.props.EnumProperty(
         name="Interpolation",
@@ -405,7 +406,7 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default='Repeat',
     )
-    
+
     colorspace: bpy.props.EnumProperty(
         name="Color Space",
         description="Set the color space of the texture",
@@ -434,8 +435,6 @@ class SequenceBakeProperties(PropertyGroup):
         ],
         default='sRGB',
     )
-    
-
 
 
 class SequencedBakePanel(Panel):
@@ -446,8 +445,8 @@ class SequencedBakePanel(Panel):
     bl_category = 'Sequenced Bake'
 
     def draw(self, context):
-    
-        layout = self.layout        
+
+        layout = self.layout
         scene = context.scene
         sequence_bake_props = scene.sequence_bake_props
         option_padding = 2.0
@@ -457,78 +456,78 @@ class SequencedBakePanel(Panel):
         col = box.column(align=True)
         col.label(text="Material Output Path:")
         col.prop(sequence_bake_props, "sequenced_bake_output_path")
-        
+
         col.separator(factor=3.0, type='LINE')
-        
+
         # Generated Image Size
         col.label(text="Generated Image Size:")
         row = col.row(align=True)
         row.prop(sequence_bake_props, "sequenced_bake_width")
         row.prop(sequence_bake_props, "sequenced_bake_height")
-        
+
         col.separator()
-        
+
         col.label(text="Baked Image Format:")
         col.prop(sequence_bake_props, "sequence_bake_image_format")
-        
+
         col.separator()
-        
+
         col.prop(sequence_bake_props, "sequence_is_alpha")
         col.prop(sequence_bake_props, "sequence_clear_baked_maps")
-        
+
         col.separator(factor=3.0, type='LINE')
-        
+
         col.label(text="Image Texture Settings:")
         col.prop(sequence_bake_props, "interpolation")
         col.prop(sequence_bake_props, "projection")
         col.prop(sequence_bake_props, "extension")
         col.prop(sequence_bake_props, "colorspace")
-        
+
         col.separator(factor=3.0, type='LINE')
-                
+
         # Bake Type Options
         col.label(text="Bake Type Options:")
-        col.prop(sequence_bake_props, "sequenced_bake_normal")  
-        
+        col.prop(sequence_bake_props, "sequenced_bake_normal")
+
         # Expand additional options if normal is selected
         if sequence_bake_props.sequenced_bake_normal:
             col.label(text="Normal Map Options:")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "normal_map_space")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "normal_map_red_channel")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "normal_map_green_channel")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "normal_map_blue_channel")
-        
+
         col.prop(sequence_bake_props, "sequenced_bake_roughness")
         col.prop(sequence_bake_props, "sequenced_bake_glossy")
-        
+
         # Expand additional options if glossy is selected
         if sequence_bake_props.sequenced_bake_glossy:
             col.label(text="Lighting Contributions:")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "glossy_lighting_direct", text="Direct")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "glossy_lighting_indirect", text="Indirect")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "glossy_lighting_color", text="Color")
-        
+
         col.prop(sequence_bake_props, "sequenced_bake_emission")
         col.prop(sequence_bake_props, "sequenced_bake_ambient_occlusion")
         col.prop(sequence_bake_props, "sequenced_bake_shadow")
@@ -536,75 +535,75 @@ class SequencedBakePanel(Panel):
         col.prop(sequence_bake_props, "sequenced_bake_uv")
         col.prop(sequence_bake_props, "sequenced_bake_environment")
         col.prop(sequence_bake_props, "sequenced_bake_diffuse")
-        
+
         # Expand additional options if diffuse is selected
         if sequence_bake_props.sequenced_bake_diffuse:
             col.label(text="Lighting Contributions:")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "diffuse_lighting_direct", text="Direct")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "diffuse_lighting_indirect", text="Indirect")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "diffuse_lighting_color", text="Color")
-        
+
         col.prop(sequence_bake_props, "sequenced_bake_transmission")
-        
+
         # Expand additional options if transmission is selected
         if sequence_bake_props.sequenced_bake_transmission:
             col.label(text="Lighting Contributions:")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "transmission_lighting_direct", text="Direct")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "transmission_lighting_indirect", text="Indirect")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "transmission_lighting_color", text="Color")
-        
+
         col.prop(sequence_bake_props, "sequenced_bake_combined")
-        
+
         # Expand additional options if combined is selected
         if sequence_bake_props.sequenced_bake_combined:
             col.label(text="Lighting Contributions:")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "combined_lighting_direct", text="Direct")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "combined_lighting_indirect", text="Indirect")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "combined_contribution_deffuse", text="Diffuse")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "combined_contribution_glossy", text="Glossy")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "combined_contribution_transmission", text="Transmission")
-            
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequence_bake_props, "combined_contribution_emit", text="Emit")
-        
+
         col.prop(sequence_bake_props, "sequenced_bake_metallic")
-        
+
         col.separator(factor=3.0, type='LINE')
-        
+
         col.label(text="Color Management:")
         col.prop(sequence_bake_props, "display_device")
         col.prop(sequence_bake_props, "view_transform")
@@ -612,11 +611,12 @@ class SequencedBakePanel(Panel):
         col.prop(sequence_bake_props, "exposure")
         col.prop(sequence_bake_props, "gamma")
         col.prop(sequence_bake_props, "sequencer")
-        
+
         col.separator(factor=3.0, type='LINE')
-        
+
         # Baking Button
         col.operator("sequenced_bake.bake", text="Bake Material Sequence")
+
 
 class SequencedBakeOperator(Operator):
     bl_idname = "sequenced_bake.bake"
@@ -624,15 +624,15 @@ class SequencedBakeOperator(Operator):
     _props = None
     object_name = ""
     material_name = ""
-    
+
     def execute(self, context):
-    
+
         if bpy.context.scene.render.engine == 'CYCLES':
-            
+
             self._props = bpy.context.scene.sequence_bake_props
-            
+
             # Define the root directory.
-            root_directory = self._props.sequenced_bake_output_path        
+            root_directory = self._props.sequenced_bake_output_path
             if not root_directory:
                 self.report({'ERROR'}, "No directory provided")
                 return {'CANCELLED'}
@@ -665,20 +665,20 @@ class SequencedBakeOperator(Operator):
                 bake_types.append('COMBINED')
             if self._props.sequenced_bake_metallic:
                 bake_types.append('METALLIC')
-                
+
             # Get the current frame range            
             start_frame = bpy.context.scene.frame_start
-            end_frame = bpy.context.scene.frame_end            
+            end_frame = bpy.context.scene.frame_end
             frame_range = range(start_frame, end_frame + 1)
-            
+
             # Get property settings.
-            sequence_bake_image_format = self._props.sequence_bake_image_format        
+            sequence_bake_image_format = self._props.sequence_bake_image_format
             sequence_is_alpha = self._props.sequence_is_alpha
 
             # Get the active object
             obj = bpy.context.active_object
             self.object_name = obj.name
-            
+
             if not obj:
                 self.report({'ERROR'}, "No active object selected. Please select an object and try again")
                 return {'CANCELLED'}
@@ -686,7 +686,7 @@ class SequencedBakeOperator(Operator):
             # Get the active material
             mat = obj.active_material
             self.material_name = mat.name
-            
+
             if not mat:
                 self.report({'ERROR'}, "No active object selected. Please select an object and try again")
                 return {'CANCELLED'}
@@ -695,68 +695,71 @@ class SequencedBakeOperator(Operator):
             image_width = self._props.sequenced_bake_width
             image_height = self._props.sequenced_bake_height
 
-             # Clear any existing image textures
+            # Clear any existing image textures
             def clear_generated_textures():
-                if(self._props.sequence_clear_baked_maps):
+                if (self._props.sequence_clear_baked_maps):
                     try:
                         for image in bpy.data.images:
                             if image.users == 0:
                                 bpy.data.images.remove(image)
                     except Exception as err:
                         self.report({'ERROR'}, f"Problem with clearing baked maps: {err}")
-            # 
+
+            #
             def bake_maps(bake_type):
-            
+
                 if bake_type == "METALLIC":
                     # Disconnect the node connected to the metallic input of the Pricipaled BSDF and connect it directly to the material output node.
                     connect_metallic_node(mat)
-                
+
                 for frame in frame_range:
-                    
+
                     # Set the frame and update the scene
                     bpy.context.scene.frame_set(frame)
                     bpy.context.view_layer.update()
-                    
-                    bake_type_name = self.object_name +"_"+ self.material_name +"_"+ bake_type
+
+                    bake_type_name = self.object_name + "_" + self.material_name + "_" + bake_type
 
                     # Create a new texture for the Image Texture node
-                    texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height, alpha=sequence_is_alpha)
-                    
+                    texture = bpy.data.images.new(name=bake_type_name, width=image_width, height=image_height,
+                                                  alpha=sequence_is_alpha)
+
                     # Texture color space.
                     texture.colorspace_settings.name = self._props.colorspace
-                    
+
                     # Create a new Image Texture node
                     image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                    
+
                     # Image Texture Settings.
-                    image_node.interpolation = self._props.interpolation.capitalize() 
-                    image_node.projection  = self._props.projection.upper() 
-                    image_node.extension  = self._props.extension.upper()
-                    
+                    image_node.interpolation = self._props.interpolation.capitalize()
+                    image_node.projection = self._props.projection.upper()
+                    image_node.extension = self._props.extension.upper()
+
                     # Get the position of the material output node.
                     material_output_node = None
                     for node in mat.node_tree.nodes:
                         if node.type == 'OUTPUT_MATERIAL':
                             material_output_node = node
                             break
-                    
+
                     if material_output_node:
                         material_output_position = material_output_node.location
                     else:
                         # Default if Material Output node isn't found
-                        self.report({'ERROR'}, "Material Output node was not found, Please add your material output node and try again.")
-                        return {'CANCELLED'}                    
-                    
-                    # Set node position to the right of the material output node.
+                        self.report({'ERROR'},
+                                    "Material Output node was not found, Please add your material output node and try again.")
+                        return {'CANCELLED'}
+
+                        # Set node position to the right of the material output node.
                     image_node.location = (material_output_position.x + 250, material_output_position.y)
                     image_node.image = texture
 
                     # Select the new Image Texture node making it the active selection.
                     mat.node_tree.nodes.active = image_node
-                    
+
                     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
-                     # Set bake type and lighting contributions
+                    # Set bake type and lighting contributions
                     if bake_type == "DIFFUSE":
                         bpy.context.scene.render.bake.use_pass_direct = self._props.diffuse_lighting_direct
                         bpy.context.scene.render.bake.use_pass_indirect = self._props.diffuse_lighting_indirect
@@ -769,17 +772,17 @@ class SequencedBakeOperator(Operator):
                         bpy.context.scene.render.bake.use_pass_direct = self._props.transmission_lighting_direct
                         bpy.context.scene.render.bake.use_pass_indirect = self._props.transmission_lighting_indirect
                         bpy.context.scene.render.bake.use_pass_color = self._props.transmission_lighting_color
-                    elif bake_type == "NORMAL":                      
+                    elif bake_type == "NORMAL":
                         # Set the normal space (Object or Tangent)
                         if self._props.normal_map_space == 'OBJECT':
                             bpy.context.scene.render.bake.normal_space = 'OBJECT'
                         else:
-                            bpy.context.scene.render.bake.normal_space = 'TANGENT'                        
-                        # Set the swizzle settings for normal channel baking
+                            bpy.context.scene.render.bake.normal_space = 'TANGENT'
+                            # Set the swizzle settings for normal channel baking
                         bpy.context.scene.render.bake.normal_r = self._props.normal_map_red_channel
                         bpy.context.scene.render.bake.normal_g = self._props.normal_map_green_channel
                         bpy.context.scene.render.bake.normal_b = self._props.normal_map_blue_channel
-                                                
+
                     # elif bake_type == "ROUGHNESS":
                     # elif bake_type == "EMIT":
                     # elif bake_type == "Ambient Occlusion":
@@ -787,29 +790,29 @@ class SequencedBakeOperator(Operator):
                     # elif bake_type == "POSITION":
                     # elif bake_type == "UV":
                     # elif bake_type == "ENVIRONMENT":
-                    
+
                     elif bake_type == "COMBINED":
                         bpy.context.scene.render.bake.use_pass_direct = self._props.combined_lighting_direct
                         bpy.context.scene.render.bake.use_pass_indirect = self._props.combined_lighting_indirect
-                        bpy.context.scene.render.bake.use_pass_color = self._props.combined_lighting_color                        
+                        bpy.context.scene.render.bake.use_pass_color = self._props.combined_lighting_color
                         bpy.context.scene.render.bake.use_pass_diffuse = self._props.combined_contribution_deffuse
                         bpy.context.scene.render.bake.use_pass_glossy = self._props.combined_contribution_glossy
                         bpy.context.scene.render.bake.use_pass_transmission = self._props.combined_contribution_transmission
                         bpy.context.scene.render.bake.use_pass_emit = self._props.combined_contribution_emit
-                    
+
                     # elif bake_type == "METALLIC":
-                    
+
                     # Color Management options.                    
                     # Apply Display Device
                     bpy.context.scene.display_settings.display_device = self._props.display_device
-                    
+
                     # Apply View Transform and Look
                     bpy.context.scene.view_settings.view_transform = self._props.view_transform
-                    
+
                     agx_prefix = ''
                     if self._props.view_transform == 'AgX' and self._props.look != 'None':
                         agx_prefix = 'AgX - '
-                    
+
                     bpy.context.scene.view_settings.look = agx_prefix + self._props.look
 
                     # Apply Exposure and Gamma
@@ -820,129 +823,131 @@ class SequencedBakeOperator(Operator):
                     try:
                         bpy.context.scene.sequencer_colorspace_settings.name = self._props.sequencer
                     except Exception as e:
-                        self.report({'WARNING'}, f"Sequencer color space '{props.sequencer}' not applied: {str(e)}")                    
-                    
-                    # Bake the texture
+                        self.report({'WARNING'}, f"Sequencer color space '{props.sequencer}' not applied: {str(e)}")
+
+                        # Bake the texture
                     try:
                         if bake_type == "METALLIC":
                             bpy.ops.object.bake(type="EMIT")
                         else:
                             bpy.ops.object.bake(type=bake_type)
                     except Exception as error:
-                        self.report({'ERROR'}, f"There was an error while attempting to bake the {bake_type} map. Error: {error.args}")
+                        self.report({'ERROR'},
+                                    f"There was an error while attempting to bake the {bake_type} map. Error: {error.args}")
                         return {"CANCELLED"}
-                    
+
                     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
                     # Define the output path
-                    image_path = os.path.join(root_directory, bake_type_name, str(frame) + f".{sequence_bake_image_format}")
+                    image_path = os.path.join(root_directory, bake_type_name,
+                                              str(frame) + f".{sequence_bake_image_format}")
 
                     # Save the rendered image
                     texture.save_render(image_path)
-                    
+
                     # Update the Blender interface
                     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
-                    
+
                     # Clear ONLY the generated texture nodes after the rendered image is saved.
-                    active_node = mat.node_tree.nodes.active                
+                    active_node = mat.node_tree.nodes.active
                     mat.node_tree.nodes.remove(active_node)
-                    
+
                 # Reconnect the pricipled BSDF node to the material output node.
                 if bake_type == "METALLIC":
-                    reconnect_node(mat)  
-                    
+                    reconnect_node(mat)
+
             def connect_metallic_node(material):
                 # Connect the node currenty connected to the metallic channel of the Pricipaled BSDF and connect it directly to the material output.
-            
+
                 # Check if the material has a node tree and use nodes
                 if material.use_nodes:
                     nodes = material.node_tree.nodes
                     links = material.node_tree.links
-                    
+
                     # Find the Principled BSDF and Material Output nodes
                     principled_bsdf = None
                     material_output = None
-                    
+
                     for node in nodes:
                         if node.type == 'BSDF_PRINCIPLED':
                             principled_bsdf = node
                         elif node.type == 'OUTPUT_MATERIAL':
                             material_output = node
-                    
+
                     if principled_bsdf and material_output:
                         # Get the input connected to the 'Metallic' socket of the Principled BSDF node
                         metallic_input = principled_bsdf.inputs['Metallic']
-                        
+
                         if metallic_input.is_linked:
                             # Get the node connected to the Metallic input
                             metallic_node_link = metallic_input.links[0]
                             connected_node = metallic_node_link.from_node
                             connected_output_socket = metallic_node_link.from_socket
-                            
+
                             # Connect it to the Surface input of the Material Output node
                             surface_input = material_output.inputs['Surface']
                             links.new(connected_output_socket, surface_input)
-                                    
+
                         else:
                             self.report({'WARNING'}, "The Metallic input is not connected to any node")
                     else:
                         self.report({'WARNING'}, "Principled BSDF or Material Output node not found")
                 else:
-                    self.report({'WARNING'}, "The material does not use nodes")                
-            
-            def reconnect_node(material):                
+                    self.report({'WARNING'}, "The material does not use nodes")
+
+            def reconnect_node(material):
                 # Reconnects the Pricipled BSDF node to the material output node.
 
                 # Check if the material has a node tree
                 if material.use_nodes:
                     nodes = material.node_tree.nodes
                     links = material.node_tree.links
-                    
+
                     # Find the Principled BSDF and Material Output nodes
                     principled_bsdf = None
                     material_output = None
-                    
+
                     for node in nodes:
                         if node.type == 'BSDF_PRINCIPLED':
                             principled_bsdf = node
                         elif node.type == 'OUTPUT_MATERIAL':
                             material_output = node
-                    
+
                     if principled_bsdf and material_output:
                         # Find the Surface input of the Material Output node
                         surface_input = material_output.inputs['Surface']
-                        
+
                         # Disconnect any existing connections to the Surface input
                         for link in surface_input.links:
                             links.remove(link)
-                        
+
                         # Connect the Principled BSDF node's output to the Surface input
                         bsdf_output_socket = principled_bsdf.outputs['BSDF']
                         links.new(bsdf_output_socket, surface_input)
-                        
+
                         self.report({'INFO'}, "Reconnected Principled BSDF to Material Output")
                     else:
                         self.report({'WARNING'}, "Principled BSDF or Material Output node not found")
                 else:
                     self.report({'WARNING'}, "The material does not use nodes")
-  
-                        
-            if bake_types:            
+
+            if bake_types:
                 # Start baking the different material map sequences
                 for bake_type in bake_types:
                     # Begin baking
                     bake_maps(bake_type)
-                    
+
                 # Clear any existing image textures        
                 clear_generated_textures()
-            
+
             else:
                 self.report({'WARNING'}, "No bake types have been selected, Please choose a bake type and try again.")
                 return {"CANCELLED"}
-            
+
             self.report({'INFO'}, "Finished.")
             return {'FINISHED'}
-        
+
         else:
-            self.report({'WARNING'}, "Render engine is not set to Cycles.\nPlease switch to Cycles under the rendering tab and try again.")
+            self.report({'WARNING'},
+                        "Render engine is not set to Cycles.\nPlease switch to Cycles under the rendering tab and try again.")
             return {'FINISHED'}
