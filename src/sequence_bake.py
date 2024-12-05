@@ -639,7 +639,7 @@ class SequencedBakeOperator(Operator):
             if self._props.sequenced_bake_emission:
                 bake_types.append('EMIT')
             if self._props.sequenced_bake_ambient_occlusion:
-                bake_types.append('Ambient Occlusion')
+                bake_types.append('AO')
             if self._props.sequenced_bake_shadow:
                 bake_types.append('SHADOW')
             if self._props.sequenced_bake_position:
@@ -878,6 +878,8 @@ class SequencedBakeOperator(Operator):
                             # Connect it to the Surface input of the Material Output node
                             surface_input = material_output.inputs['Surface']
                             links.new(connected_output_socket, surface_input)
+                            
+                            # TODO: Add GLTF Method here.
 
                         else:
                             self.report({'WARNING'}, "The Metallic input is not connected to any node")
