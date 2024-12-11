@@ -16,7 +16,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 0, 7),
+    "version": (1, 0, 8),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -27,6 +27,8 @@ import bpy
 from .sequence_bake import (
     SequenceBakeProperties,
     SequencedBakePanel,
+    SequenceBakeNode,
+    SequenceBakeSocket,
     SequencedBakeOperator,
 )
 from .sprite_sheet_creator import (
@@ -37,6 +39,8 @@ from .sprite_sheet_creator import (
 from bpy.types import (
         Operator,
         AddonPreferences,
+        Node,
+        NodeSocket,
         )
 
 class SequenceBakeAddonProperties(AddonPreferences):
@@ -67,6 +71,15 @@ class SequenceBakeAddonProperties(AddonPreferences):
         row.operator("wm.url_open", text="GitHub").url = self.github_url
         row.operator("wm.url_open", text="Discord").url = self.discord_url
 
+def add_custom_node_category():
+    bpy.types.NODE_MT_add.append(draw_custom_node_menu)
+
+def remove_custom_node_category():
+    bpy.types.NODE_MT_add.remove(draw_custom_node_menu)
+
+def draw_custom_node_menu(self, context):
+    layout = self.layout
+    layout.operator("node.add_node", text="Sequence Bake").type = "ShaderNodeSequenceBake"
 
 def register():
     bpy.utils.register_class(SequenceBakeAddonProperties)
@@ -77,21 +90,30 @@ def register():
     bpy.utils.register_class(SequencedBakePanel)
     bpy.utils.register_class(SequencedBakeOperator)
     bpy.utils.register_class(SequenceBakeProperties)
+    bpy.utils.register_class(SequenceBakeSocket)
+    bpy.utils.register_class(SequenceBakeNode)
     bpy.types.Scene.sequence_bake_props = bpy.props.PointerProperty(type=SequenceBakeProperties)
+    bpy.types.ShaderNode.sequence_bake_props = bpy.props.PointerProperty(type=SequenceBakeProperties)
     
     # Register Sprite Sheet components
     bpy.utils.register_class(SpriteSheetCreatorPanel)
     bpy.utils.register_class(SpriteSheetProperties)
     bpy.types.Scene.sprite_sheet_props = bpy.props.PointerProperty(type=SpriteSheetProperties)
     bpy.utils.register_class(OBJECT_OT_CreateSpriteSheet)
+    
+    add_custom_node_category()
 
 def unregister():
+    remove_custom_node_category()
+
     bpy.utils.unregister_class(SequenceBakeAddonProperties)
     
     # Unregister Sequence Bake components
     bpy.utils.unregister_class(SequencedBakePanel)
     bpy.utils.unregister_class(SequencedBakeOperator)
     bpy.utils.unregister_class(SequenceBakeProperties)
+    bpy.utils.unregister_class(SequenceBakeSocket)
+    bpy.utils.unregister_class(SequenceBakeNode)
     del bpy.types.Scene.sequence_bake_props
     
     # Unregister Sprite Sheet components

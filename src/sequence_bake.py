@@ -19,6 +19,8 @@ import re
 from bpy.types import (
     Operator,
     Panel,
+    Node,
+    NodeSocket,
     PropertyGroup,
 )
 
@@ -427,6 +429,17 @@ class SequenceBakeProperties(PropertyGroup):
         default='sRGB'
     )
 
+class SequenceBakeSocket(NodeSocket):
+    bl_idname = "SequenceBakeSocket"
+    bl_label = "Sequence Bake Socket"
+
+    # Optional: define socket data type
+    def draw(self, context, layout, node, text):
+        layout.label(text=text)
+
+    def draw_color(self, context, node):
+        return (0.8, 0.8, 0.2, 1.0)  # Yellow color
+
 
 class SequencedBakePanel(Panel):
     bl_label = "Sequenced Bake"
@@ -607,6 +620,193 @@ class SequencedBakePanel(Panel):
 
         # Baking Button
         col.operator("sequenced_bake.bake", text="Bake Material Sequence")
+
+class SequenceBakeNode(Node):
+    bl_idname = "ShaderNodeSequenceBake"
+    bl_label = "Sequence Bake"
+    bl_icon = "NODE"
+
+    def init(self, context):
+        self.width = 300
+        # self.inputs.new("NodeSocketShader", "Shader")
+        # self.outputs.new("NodeSocketShader", "Output")
+
+    def draw_buttons(self, context, layout):
+        scene = context.scene
+        sequence_bake_props = scene.sequence_bake_props
+        option_padding = 2.0
+
+        # Output Path
+        box = layout.box()
+        col = box.column(align=True)
+        col.label(text="Material Output Path:")
+        col.prop(sequence_bake_props, "sequenced_bake_output_path")
+
+        col.separator(factor=3.0, type='LINE')
+
+        # Generated Image Size
+        col.label(text="Generated Image Size:")
+        row = col.row(align=True)
+        row.prop(sequence_bake_props, "sequenced_bake_width")
+        row.prop(sequence_bake_props, "sequenced_bake_height")
+
+        col.separator()
+
+        col.label(text="Baked Image Format:")
+        col.prop(sequence_bake_props, "sequence_bake_image_format")
+
+        col.separator()
+
+        col.prop(sequence_bake_props, "sequence_is_alpha")
+        col.prop(sequence_bake_props, "sequence_clear_baked_maps")
+
+        col.separator(factor=3.0, type='LINE')
+
+        col.label(text="Image Texture Settings:")
+        col.prop(sequence_bake_props, "interpolation")
+        col.prop(sequence_bake_props, "projection")
+        col.prop(sequence_bake_props, "extension")
+        col.prop(sequence_bake_props, "colorspace")
+
+        col.separator(factor=3.0, type='LINE')
+
+        # Bake Type Options
+        col.label(text="Bake Type Options:")
+        col.prop(sequence_bake_props, "sequenced_bake_normal")
+
+        # Expand additional options if normal is selected
+        if sequence_bake_props.sequenced_bake_normal:
+            col.label(text="Normal Map Options:")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "normal_map_space")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "normal_map_red_channel")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "normal_map_green_channel")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "normal_map_blue_channel")
+
+        col.prop(sequence_bake_props, "sequenced_bake_roughness")
+        col.prop(sequence_bake_props, "sequenced_bake_glossy")
+
+        # Expand additional options if glossy is selected
+        if sequence_bake_props.sequenced_bake_glossy:
+            col.label(text="Lighting Contributions:")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "glossy_lighting_direct", text="Direct")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "glossy_lighting_indirect", text="Indirect")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "glossy_lighting_color", text="Color")
+
+        col.prop(sequence_bake_props, "sequenced_bake_emission")
+        col.prop(sequence_bake_props, "sequenced_bake_ambient_occlusion")
+        col.prop(sequence_bake_props, "sequenced_bake_shadow")
+        col.prop(sequence_bake_props, "sequenced_bake_position")
+        col.prop(sequence_bake_props, "sequenced_bake_uv")
+        col.prop(sequence_bake_props, "sequenced_bake_environment")
+        col.prop(sequence_bake_props, "sequenced_bake_diffuse")
+
+        # Expand additional options if diffuse is selected
+        if sequence_bake_props.sequenced_bake_diffuse:
+            col.label(text="Lighting Contributions:")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "diffuse_lighting_direct", text="Direct")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "diffuse_lighting_indirect", text="Indirect")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "diffuse_lighting_color", text="Color")
+
+        col.prop(sequence_bake_props, "sequenced_bake_transmission")
+
+        # Expand additional options if transmission is selected
+        if sequence_bake_props.sequenced_bake_transmission:
+            col.label(text="Lighting Contributions:")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "transmission_lighting_direct", text="Direct")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "transmission_lighting_indirect", text="Indirect")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "transmission_lighting_color", text="Color")
+
+        col.prop(sequence_bake_props, "sequenced_bake_combined")
+
+        # Expand additional options if combined is selected
+        if sequence_bake_props.sequenced_bake_combined:
+            col.label(text="Lighting Contributions:")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "combined_lighting_direct", text="Direct")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "combined_lighting_indirect", text="Indirect")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "combined_contribution_deffuse", text="Diffuse")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "combined_contribution_glossy", text="Glossy")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "combined_contribution_transmission", text="Transmission")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequence_bake_props, "combined_contribution_emit", text="Emit")
+
+        col.prop(sequence_bake_props, "sequenced_bake_metallic")
+
+        col.separator(factor=3.0, type='LINE')
+
+        col.label(text="Color Management:")
+        col.prop(sequence_bake_props, "display_device")
+        col.prop(sequence_bake_props, "view_transform")
+        col.prop(sequence_bake_props, "look")
+        col.prop(sequence_bake_props, "exposure")
+        col.prop(sequence_bake_props, "gamma")
+        col.prop(sequence_bake_props, "sequencer")
+
+        col.separator(factor=3.0, type='LINE')
+
+        # Baking Button
+        col.operator("sequenced_bake.bake", text="Bake Material Sequence")
+
+    def draw_buttons_ext(self, context, layout):
+        layout.label(text="Extended Settings")
+
+    def draw_label(self):
+        return "Sequence Bake"
 
 
 class SequencedBakeOperator(Operator):
