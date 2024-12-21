@@ -69,7 +69,7 @@ class SequencedBakeProperties(PropertyGroup):
     )
     sequence_use_float: bpy.props.BoolProperty(
         name="32-bit Float",
-        description="Create image with 32-bit floating-point bit depth",
+        description="Create image with 32-bit floating-point bit depth\nControls the internal precision of the image during creation and baking.",
         default=False
     )
     sequence_clear_baked_maps: bpy.props.BoolProperty(
@@ -457,7 +457,7 @@ class SequencedBakePanel(Panel):
 
         layout = self.layout
         scene = context.scene
-        sequence_bake_props = scene.sequenced_bake_props
+        sequenced_bake_props = scene.sequenced_bake_props
         option_padding = 2.0
 
         # Output Path
@@ -885,10 +885,6 @@ class SequencedBakeOperator(Operator):
                 self.report({'ERROR'}, "No active object selected. Please select an object and try again")
                 return {'CANCELLED'}
 
-            # Define the image size
-            image_width = self._props.sequenced_bake_width
-            image_height = self._props.sequenced_bake_height
-
             # Clear any existing image textures
             def clear_generated_textures():
                 if (self._props.sequence_clear_baked_maps):
@@ -911,15 +907,17 @@ class SequencedBakeOperator(Operator):
                     # Set the frame and update the scene
                     bpy.context.scene.frame_set(frame)
                     bpy.context.view_layer.update()
-
+                    
+                    # Format the name of the generated texture.
                     bake_type_name = self.object_name + "_" + self.material_name + "_" + bake_type
 
                     # Create a new texture for the Image Texture node
                     texture = bpy.data.images.new(
-                        name=bake_type_name, width=image_width,
-                        height=image_height,
+                        name=bake_type_name, 
+                        width=self._props.sequenced_bake_width,
+                        height=self._props.sequenced_bake_height,
                         alpha=self._props.sequence_is_alpha,
-                        float_buffer=self._props.sequence_use_float
+                        float_buffer=self._props.sequence_use_float #  "float_buffer controls the internal precision of the image during creation and baking."
                     )
 
                     # Texture color space.
@@ -1039,6 +1037,11 @@ class SequencedBakeOperator(Operator):
 
                     # Define the output path
                     image_path = os.path.join(root_directory, bake_type_name, str(frame) + f".{self._props.sequenced_bake_image_format}")
+                    
+                    # NOTE: Setting this doesn't seem to make a difference for the saved image.
+                    # "color_depth controls the precision of the saved file during export."
+                    if not self._props.sequence_use_float:
+                        bpy.context.scene.render.image_settings.color_depth = '8'
 
                     # Save the rendered image
                     texture.save_render(image_path)
