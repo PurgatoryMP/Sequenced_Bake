@@ -186,7 +186,7 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
     
     def execute(self, context):
         self._props = context.scene.sprite_sheet_props
-        self._sb_props = context.scene.sequence_bake_props
+        self._sb_props = context.scene.sequenced_bake_props
 
         # Get the sprite sheet directory
         directory = bpy.path.abspath(self._props.directory)
