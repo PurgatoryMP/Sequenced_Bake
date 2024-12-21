@@ -451,6 +451,7 @@ class SequencedBakePanel(Panel):
     bl_idname = "VIEW3D_PT_sequenced_bake"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
+    bl_description = "Bake a material sequence based on the defined settings and keyframed node settings."
     bl_category = 'Sequenced Bake'
 
     def draw(self, context):
@@ -628,8 +629,9 @@ class SequencedBakePanel(Panel):
         col.operator("sequenced_bake.bake", text="Bake Material Sequence")
 
 class SequencedBakeNode(Node):
-    bl_idname = "ShaderNodeSequenceBake"
+    bl_idname = "ShaderNodeSequencedBake"
     bl_label = "Sequenced Bake"
+    bl_description = "Bake a material sequence based on the defined settings and keyframed node settings."
     bl_icon = "NODE"
 
     def init(self, context):
@@ -813,12 +815,13 @@ class SequencedBakeNode(Node):
         layout.label(text="Extended Settings")
 
     def draw_label(self):
-        return "Sequence Bake"
+        return "Sequenced Bake"
 
 
 class SequencedBakeOperator(Operator):
     bl_idname = "sequenced_bake.bake"
     bl_label = "Sequenced Bake"
+    bl_description = "Bakes the material sequence for the selected bake types"
     _props = None
     object_name = ""
     material_name = ""
