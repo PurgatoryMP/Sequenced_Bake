@@ -25,15 +25,15 @@ from bpy.types import (
         )
 
 image_formats = [
-    ("PNG", "PNG", "Save as PNG"),
-    ("JPEG", "JPEG", "Save as JPEG"),
-    ("BMP", "BMP", "Save as BMP"),
-    ("TIFF", "TIFF", "Save as TIFF"),
-    ("TGA", "TGA", "Save as TGA"),
-    ("OPEN_EXR", "OpenEXR", "Save as OpenEXR"),
-    ("HDR", "Radiance HDR", "Save as Radiance HDR"),
-    ("CINEON", "Cineon", "Save as Cineon"),
-    ("DPX", "DPX", "Save as DPX")
+    ("png", "PNG", "Save as PNG"),
+    ("jpeg", "JPEG", "Save as JPEG"),
+    ("bmp", "BMP", "Save as BMP"),
+    ("tiff", "TIFF", "Save as TIFF"),
+    ("tga", "TGA", "Save as TGA"),
+    ("openexr", "OpenEXR", "Save as OpenEXR"),
+    ("hdr", "Radiance HDR", "Save as Radiance HDR"),
+    ("cineon", "Cineon", "Save as Cineon"),
+    ("dpx", "DPX", "Save as DPX")
 ]
 
 generated_images = []
@@ -112,6 +112,16 @@ class SpriteSheetProperties(PropertyGroup):
         description="Clears the generated images from blenders image viewer list",
         default=True
     )
+    file_overwrite: bpy.props.BoolProperty(
+        name="Overwrite file",
+        description="Overwrites all sprite sheet files if they exists in the path.",
+        default=True
+    )
+    file_name: bpy.props.StringProperty(
+        name="",
+        description="Name of the saved file.\nIf no name is entered the file name defaults to Object name, Material name, Sprite_sheet",
+        default=""
+    )
 
 class SpriteSheetCreatorPanel(Panel):
     bl_label = "Sprite Sheet Creator"
@@ -129,6 +139,7 @@ class SpriteSheetCreatorPanel(Panel):
         # Sprite Sheet Creator Section        
         box = layout.box()
         col = box.column(align=True)
+        row = box.row(align=True)
         
         col.label(text="Image Sequence Direcotry:")
         col.prop(sprite_sheet_props, "directory")
@@ -156,11 +167,19 @@ class SpriteSheetCreatorPanel(Panel):
         col.prop(sprite_sheet_props, "is_reversed")
 
         col.separator(factor=3.0, type='LINE')
+
+        col.label(text="Output File Name:")
+
+        row = col.row(align=True)  # New row for file name and extension
+        row.prop(sprite_sheet_props, "file_name")
+        row.prop(sprite_sheet_props, "sprite_sheet_image_format")
+
+        col.prop(sprite_sheet_props, "file_overwrite")
         
-        col.label(text="Image Format:")
-        col.prop(sprite_sheet_props, "sprite_sheet_image_format")
+        # col.label(text="Image Format:")
+        # row.prop(sprite_sheet_props, "sprite_sheet_image_format")
         
-        col.separator()
+        col.separator(factor=3.0, type='LINE')
         
         col.prop(sprite_sheet_props, "sprite_sheet_is_alpha")
         col.prop(sprite_sheet_props, "open_images")
@@ -299,33 +318,41 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
 
     def process_subdir(self, subdir_path):
     
-        file_names = os.listdir(subdir_path)
+        # file_names = os.listdir(subdir_path)
         
         # Filter and delte priviously generated sprite sheets before creating another one
-        non_numeric_files = [f for f in file_names if not f.split('.')[0].isdigit()]
-        if non_numeric_files:
-            # Assuming we want to delete the first non-numeric file found
-            file_to_delete = non_numeric_files[0]
-            file_path = os.path.join(subdir_path, file_to_delete)
-        
-            # Delete the file
-            os.remove(file_path)
-        
+        # non_numeric_files = [f for f in file_names if not f.split('.')[0].isdigit()]
+        # if non_numeric_files:
+        #     # Assuming we want to delete the first non-numeric file found
+        #     file_to_delete = non_numeric_files[0]
+        #     file_path = os.path.join(subdir_path, file_to_delete)
+        #
+        #     # Delete the file
+        #     os.remove(file_path)
+
         # Refresh the file list after removing any generated sprite sheets.
         file_names = os.listdir(subdir_path)
-    
-        # Get the images from the sub-directorys.
-        image_files = [f for f in file_names]
-        
+
+        # Filter: only include files where the part before the extension is an integer
+        image_files = []
+        for f in file_names:
+            name, ext = os.path.splitext(f)
+            try:
+                int(name)  # Try converting to int
+                image_files.append(f)
+            except ValueError:
+                continue  # Skip files with non-integer names
+
         # Defined if the sequence is going to be reversed or not.
         is_reversed = self._props.is_reversed
-        label_reversed = ""
-        
-        if is_reversed:
-            label_reversed = "_Reversed"
-        
-        # Sort files numerically
-        image_files_sorted = sorted(image_files, key=lambda x: int(x.split('.')[0]), reverse=is_reversed)
+        label_reversed = "_Reversed" if is_reversed else ""
+
+        # Sort files numerically by the integer part before the extension
+        image_files_sorted = sorted(
+            image_files,
+            key=lambda x: int(os.path.splitext(x)[0]),
+            reverse=is_reversed
+        )
         
         # Debug info
         # print(f" ")
@@ -387,6 +414,7 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         # Positioning index for the sprite sheet
         position_index = 0
 
+        # TODO: Update this forloop to use multi-threading to prevent the UI from freezing.
         for index, img in enumerate(images):
             
             # Add the images to the list.
@@ -424,25 +452,61 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
                 
                 # Increment the position index
                 position_index += 1
-                bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+                # bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
         # Update sprite sheet with new pixel data
         sprite_sheet.pixels = pixels.flatten()
-            
-        file_name = f"{subdir_name}_sprite_sheet{label_reversed}.{sprite_sheet_image_format}"
-        
-        self.report({'INFO'}, f"File Name: {file_name}")
-        
+
+        filename = self._props.file_name.strip()
+        if not filename:
+            base_name = f"{subdir_name}_SpriteSheet{label_reversed}"
+        else:
+            base_name = filename
+
+        # Ensure no duplicate extension
+        if base_name.lower().endswith(f".{sprite_sheet_image_format.lower()}"):
+            base_name = os.path.splitext(base_name)[0]
+
+        # Build initial file name
+        ext = f".{sprite_sheet_image_format}"
+        file_name = base_name + ext
         sprite_sheet_path = os.path.join(directory, file_name)
-        
-        # generated_images.append(sprite_sheet_path)
-        
-        self.report({'INFO'}, f"File Path: {sprite_sheet_path}")
-        
+
+        self.report({'INFO'}, f"Initial File Path: {sprite_sheet_path}")
+
+        # Handle overwriting and name increment
         if os.path.exists(sprite_sheet_path):
-            self.report({'INFO'}, f"Path Exists: {sprite_sheet_path}")
-            os.remove(sprite_sheet_path)
-        
+            if self._props.file_overwrite:
+                self.report({'INFO'}, f"Overwriting is enabled. Cleaning directory: {directory}")
+
+                for f in os.listdir(directory):
+                    file_path = os.path.join(directory, f)
+
+                    if os.path.isfile(file_path) and f not in image_files_sorted:
+                        try:
+                            os.remove(file_path)
+                            self.report({'INFO'}, f"Removed: {file_path}")
+                        except Exception as e:
+                            self.report({'ERROR'}, f"Failed to remove {file_path}: {e}")
+            else:
+                # Find a unique file name by appending/incrementing a number
+                counter = 1
+                new_base = base_name
+                while os.path.exists(os.path.join(directory, new_base + ext)):
+                    match = re.search(r"^(.*) \((\d+)\)$", base_name)
+                    if match:
+                        name_part = match.group(1)
+                        counter = int(match.group(2)) + 1
+                        new_base = f"{name_part} ({counter})"
+                    else:
+                        new_base = f"{base_name} ({counter})"
+                    counter += 1
+
+                file_name = new_base + ext
+                sprite_sheet_path = os.path.join(directory, file_name)
+                self.report({'INFO'}, f"File exists. New file path: {sprite_sheet_path}")
+
+        # Set and save file
         sprite_sheet.filepath_raw = sprite_sheet_path
         sprite_sheet.save()
         
