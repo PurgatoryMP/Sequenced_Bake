@@ -2,18 +2,16 @@
 
 ## Table of Contents
 1. [About](#about)  
-2. [Features](#features)  
+2. [Community / Support](#community-/-support)
+3. [Features](#features)  
    1. [Animated Texture Baking](#animated-texture-baking)  
    2. [Sprite Sheet Creation](#sprite-sheet-creation)  
-3. [Installation](#installation)  
-4. [Usage](#usage)  
+4. [Installation](#installation)  
+5. [Usage](#usage)  
    1. [Sequenced Bake Tool](#sequenced-bake-tool)  
    2. [Sprite Sheet Creator](#sprite-sheet-creator)  
-5. [Configuration](#configuration)  
-6. [Examples](#examples)  
-7. [Contributing](#contributing)  
-8. [License](#license)  
-9. [Acknowledgements](#acknowledgements)
+6. [Configuration](#configuration)  
+
 
 ---
 
