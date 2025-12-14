@@ -1,60 +1,103 @@
 # Sequenced Bake
 
-## Description:
-	
- - Sequenced Bake is a Blender 4.2 add-on designed to streamline the process of baking animated materials. With this add-on, users can efficiently bake out material sequences and pack them into sprite sheet or flipbook assets with a range of customizable options, enhancing their workflow and output quality.
+## Table of Contents
+1. [About](#about)  
+2. [Features](#features)  
+   1. [Animated Texture Baking](#animated-texture-baking)  
+   2. [Sprite Sheet Creation](#sprite-sheet-creation)  
+3. [Installation](#installation)  
+4. [Usage](#usage)  
+   1. [Sequenced Bake Tool](#sequenced-bake-tool)  
+   2. [Sprite Sheet Creator](#sprite-sheet-creator)  
+5. [Configuration](#configuration)  
+6. [Examples](#examples)  
+7. [Contributing](#contributing)  
+8. [License](#license)  
+9. [Acknowledgements](#acknowledgements)
 
-## Key Features
+---
 
- - **Animated Material Baking**: Seamlessly bake animated materials over a sequence of frames.
- - **Map Type Definition**: Select and define specific map types (e.g., combined, diffuse, normal, roughness, emission) to be baked.
- - **Customizable Output Resolution**: Set the desired resolution for the baked maps to meet your project needs.
- - **Organized Directory Structure**: Automatically saves baked maps into map type directory's for easy access and organization.
- - **Create sprite sheets or flipbook assets**: Pack any sequence of images into a sprite sheet or flipbook asset using this tool.
+## About
 
-# Usage:
+**Sequenced Bake** is a Blender add-on designed to streamline the process of baking animated material sequences and generating sprite sheet assets. With intuitive UI panels and automated workflows, this tool provides efficient material sequence baking and sprite sheet compilation for use in game engines, 2D/3D tools, and other production pipelines.
 
-## Baking Material Map Sequences:
+This project includes two main modules:
+- `sequenced_bake.py` — automated bake sequencing for textures across frame ranges  
+- `sprite_sheet_creator.py` — generates optimized sprite sheets from baked sequences
 
- 1. Create your object and material.
- 2. Animate your material using keyframes.
- 3. Set the start and end frame in for the keyframes, the number of keyframes will be the number of images generated.
- 4. Defined the output path in the sequence bake panel found in the 3D view N panel.
- 5. Set the image size for the texture maps that will be baked out.
- 6. Select the texture maps you want to be baked.
- 7. Press Bake.
- 
- - The material maps will be backed out one at a time and saved to subfolders in the output destination.
+---
 
-## Generating Sprite Sheets.
+## Features
 
- 1. First you will have had to bake out your material maps OR if you have existing images you want to pack into turn into a sprite sheet.
- 2. Select the directory contaning the subfolders for the material maps or image sequences.
- 3. Modify the settings for how many columns and rows and the size of the cells for each frame of animation.
- 4. Choose a start and end frame for your animation. for example if I have 300 frames of animation but I only want to pack frames 150 to 250. start frame would be 150 and end frame would be 250.
- 5. Click Generate Sprite Sheet.
- 
- - This will pack all of the frames defined by the start and end frame onto the newly created sprite sheet.
- 
- - The combined size of the cells will define how large the generated sprite sheet will be. Example: I have 64 cells of animation at 128x128 the generated sprite sheet will be 1024x1024.
- 
-# Notes: 
+### Animated Texture Baking
+- Bake textures across a user-specified frame range  
+- Supports Cycles bake types  
+- Handles automatic file naming and sequential output  
+- Optionally override image node file paths on the fly  
+- Designed to integrate with Blender’s node editor workflows
 
- - New directory's are created in the output path you defined for each of the map types to keep them organized. You can observe them populate during the baking process.
- 
- - Blender might appear frozen or non-responsive while it bakes out the texture maps but you will see the UI update.
- 
- - Depending on the output size you choose for the images and the complexity of the material, some bakes may take longer than others.
-	
-### Installation:
-	
- - **Blender 3.1 -> 4.1**: 
- 	-Preferences > Add-ons > Install from disk > Select the Sequenced_Bake.zip file
- 	
- - **Blender 4.2**: 
- 	
- 	- **Option 1**: 
- 	- Download the extension from extensions.blender.org which should put it in the proper directory and prompt you if you would like to enable it on installation.
- 	
- 	- **Option 2**: 
- 	- Download the Sequenced_Bake.zip file and from the Preferences > Extensions create a custom directory in the extensions path ( appdata/roaming/Blender Foundation/4.2/extensions/ "Your custom Add-on directory name" /addons/ ) Then place the downloaded file into this path.
+### Sprite Sheet Creation
+- Compile a sequence of images into a single sprite sheet  
+- Customizable grid size, padding, and layout options  
+- Output common sprite sheet formats suitable for game engines  
+- Automatically orders frames based on naming or frame index
+
+---
+
+## Installation
+
+1. Download the latest release of **Sequenced Bake**.
+2. Open Blender and navigate to:
+   `Edit → Preferences… → Add-ons`
+3. Click **Install…** and select the downloaded ZIP file.
+4. Enable the add-on by checking the box next to `Sequenced Bake`.
+5. Save preferences to retain activation.
+
+---
+
+## Usage
+
+### Sequenced Bake Tool
+
+1. In the **Shader Editor**, select the material you want to bake.
+2. Ensure your material contains an image texture node to bake into.
+3. In the **Sequenced Bake** panel:
+   - Set the **Image Folder** where source images are located (if overriding).
+   - Toggle **Override Image Path** to automatically walk through a sequence.
+   - Set start and end frames for the bake sequence.
+4. Click **Animated Bake** to execute the bake over the specified frames.
+5. Output images are automatically saved to your configured directory.
+
+---
+
+### Sprite Sheet Creator
+
+1. After baking your texture sequence, open the **Sprite Sheet Creator** panel.
+2. Select the folder containing your sequence of images.
+3. Configure sheet settings:
+   - Columns and rows  
+   - Padding between frames  
+   - Output resolution
+4. Click **Generate Sprite Sheet**.
+5. The sprite sheet will be saved to the selected output location.
+
+---
+
+## Configuration
+
+Both tools expose user-configurable settings such as:
+
+- Frame range (start/end)
+- Output directories
+- Image format (e.g., PNG, EXR)
+- Naming conventions
+- Sprite sheet grid layout settings
+
+These settings can be accessed in the respective panel UI within Blender.
+
+---
+
+## Examples
+
+**Animated Bake Example**
+

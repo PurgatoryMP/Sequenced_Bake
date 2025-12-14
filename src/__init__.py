@@ -16,7 +16,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 0, 13),
+    "version": (1, 0, 14),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -63,28 +63,15 @@ class SequencedBakeAddonProperties(AddonPreferences):
         description="The Discord Community Server",
         default="https://discord.gg/uyaq8CQwRk"
     )
-    
-    relative_paths: bpy.props.BoolProperty(
-        name="Use Relative Paths",
-        description="If enabled, new file paths will not use relative paths by default.",
-        default=True
-    )
 
     def draw(self, context):
         layout = self.layout
         row = layout.row()
+        row.label(text="Resources and Community.")
         row.operator("wm.url_open", text="Blender Extensions").url = self.website_url
         row.operator("wm.url_open", text="GitHub").url = self.github_url
         row.operator("wm.url_open", text="Discord Community").url = self.discord_url
         
-        layout.separator()
-        layout.prop(self, "relative_paths")
-
-        # Apply setting immediately
-        if self.relative_paths:
-            bpy.context.preferences.filepaths.relative_paths = False
-        else:
-            bpy.context.preferences.filepaths.relative_paths = True
 
 def add_custom_node_category():
     bpy.types.NODE_MT_add.append(draw_custom_node_menu)
