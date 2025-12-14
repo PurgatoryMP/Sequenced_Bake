@@ -27,6 +27,12 @@ This project includes two main modules:
 
 ---
 
+## Community / Support
+  
+ - **Discord**: https://discord.gg/uZw54mGKZH
+
+---
+
 ## Features
 
 ### Animated Texture Baking
@@ -46,18 +52,19 @@ This project includes two main modules:
 
 ## Installation
 
-1. Download the latest release of **Sequenced Bake**.
-2. Open Blender and navigate to:
-   `Edit → Preferences… → Add-ons`
-3. Click **Install…** and select the downloaded ZIP file.
-4. Enable the add-on by checking the box next to `Sequenced Bake`.
-5. Save preferences to retain activation.
+1. Enable internet access under the get extensions tab.
+2. Search for **Sequenced Bake** in the add-ons list.
+4. Click **Install…**.
+5. Enable the add-on by checking the box next to `Sequenced Bake` in the add-ons menu.
+6. Save preferences to retain activation.
 
 ---
 
 ## Usage
 
 ### Sequenced Bake Tool
+
+ - The Sequenced bake panel can be found both in the **3D view, N panel** or in the **Shader Editor** as its own node.
 
 1. In the **Shader Editor**, select the material you want to bake.
 2. Ensure your material contains an image texture node to bake into.
@@ -93,11 +100,5 @@ Both tools expose user-configurable settings such as:
 - Naming conventions
 - Sprite sheet grid layout settings
 
-These settings can be accessed in the respective panel UI within Blender.
-
----
-
-## Examples
-
-**Animated Bake Example**
+These settings can be accessed in the respective N panel and node UI within Blender.
 
