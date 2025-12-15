@@ -21,6 +21,8 @@ import subprocess
 from bpy.types import (
         Operator,
         Panel,
+        Node,
+        NodeSocket,
         PropertyGroup,
         )
 
@@ -39,9 +41,44 @@ image_formats = [
 generated_images = []
 
 class SpriteSheetProperties(PropertyGroup):
+    source_type: bpy.props.EnumProperty(
+        name="",
+        description="Choose where frames are sourced from",
+        items=[
+            ('DIRECTORY', "Image Sequence", "Use image files from a directory"),
+            ('VSE', "Video Sequencer", "Use frames from the Video Sequencer"),
+            ('COMPOSITOR', "Compositor Output", "Use frames rendered from the compositor"),
+        ],
+        default='DIRECTORY'
+    )
     directory: bpy.props.StringProperty(
         name="",
-        description="Select the directory containing subdirectories of images\nIf left blank will use the material output path",
+        description="Source and Output directory for sprite sheets generated from an Image Sequence source.\nIf left blank will use the material output path",
+        default="",
+        maxlen=1024,
+        subtype='DIR_PATH'
+    )
+    vse_output_path: bpy.props.StringProperty(
+        name="",
+        description="Output directory for sprite sheets generated from the Video Sequencer",
+        default="",
+        maxlen=1024,
+        subtype='DIR_PATH'
+    )
+    vse_channel: bpy.props.IntProperty(
+        name="VSE Channel",
+        description="Only render strips from this Video Sequencer channel",
+        default=1,
+        min=1
+    )
+    use_all_vse_channels: bpy.props.BoolProperty(
+        name="Use All Channels",
+        description="Use all enabled VSE channels instead of a specific channel",
+        default=False
+    )
+    compositor_output_path: bpy.props.StringProperty(
+        name="",
+        description="Output directory for sprite sheets generated from the Compositor",
         default="",
         maxlen=1024,
         subtype='DIR_PATH'
@@ -122,18 +159,36 @@ class SpriteSheetProperties(PropertyGroup):
         description="Name of the saved file.\nIf no name is entered the file name defaults to Object name, Material name, Sprite_sheet",
         default=""
     )
-
-class SpriteSheetCreatorPanel(Panel):
-    bl_label = "Sprite Sheet Creator"
-    bl_idname = "VIEW3D_PT_Sprite_Sheet_Creator"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'Sequenced Bake'
-
-    def draw(self, context):
     
-        layout = self.layout        
+
+class SpriteSheetCreatorSocket(NodeSocket):
+    bl_idname = 'SpriteSheetCreatorSocket'
+    bl_label = 'Sprite Sheet Creator Socket'
+
+    # Optional: define socket data type
+    def draw(self, context, layout, node, text):
+        layout.label(text=text)
+
+    def draw_color(self, context, node):
+        return (0.8, 0.8, 0.2, 1.0)  # Yellow color
+        
+
+class SpriteSheetCreatorNode(Node):
+    bl_idname = 'ShaderNodeSpriteSheetCreatorNode'
+    bl_label = 'Sprite Sheet Creator'
+    bl_description = 'Create Sprite Sheets.'
+    bl_icon = 'NODE'
+
+    def init(self, context):
+        self.width = 300
+        # self.inputs.new("SpriteSheetCreatorSocket", "Input")
+        # self.outputs.new("SpriteSheetCreatorSocket", "Output")
+        
+    def draw_buttons(self, context, layout):
+           
         scene = context.scene
+        option_padding = 2.0
+        
         sprite_sheet_props = scene.sprite_sheet_props
 
         # Sprite Sheet Creator Section        
@@ -141,8 +196,20 @@ class SpriteSheetCreatorPanel(Panel):
         col = box.column(align=True)
         row = box.row(align=True)
         
-        col.label(text="Image Sequence Direcotry:")
-        col.prop(sprite_sheet_props, "directory")
+        col.label(text="Source:")
+        col.prop(sprite_sheet_props, "source_type")
+
+        if sprite_sheet_props.source_type == 'DIRECTORY':
+            col.separator()
+            col.label(text="Image Sequence Directory:")
+            col.prop(sprite_sheet_props, "directory")
+            
+        if sprite_sheet_props.source_type == 'VSE':
+            col.separator()
+            col.prop(sprite_sheet_props, "use_all_vse_channels")            
+            if not sprite_sheet_props.use_all_vse_channels:
+                col.separator()
+                col.prop(sprite_sheet_props, "vse_channel")
         
         col.separator(factor=3.0, type='LINE')
         
@@ -173,11 +240,203 @@ class SpriteSheetCreatorPanel(Panel):
         row = col.row(align=True)  # New row for file name and extension
         row.prop(sprite_sheet_props, "file_name")
         row.prop(sprite_sheet_props, "sprite_sheet_image_format")
+        
+        col.separator()
+        
+        if sprite_sheet_props.source_type == 'VSE':  
+            col.label(text="VSE Output Directory:")
+            col.prop(sprite_sheet_props, "vse_output_path")
+            
+        if sprite_sheet_props.source_type == 'COMPOSITOR':
+            col.separator()
+            col.label(text="Compositor Output Directory:")
+            col.prop(sprite_sheet_props, "compositor_output_path")
+        
+        col.separator()
+
+        col.prop(sprite_sheet_props, "file_overwrite")
+        
+        col.separator(factor=3.0, type='LINE')
+        
+        col.prop(sprite_sheet_props, "sprite_sheet_is_alpha")
+        col.prop(sprite_sheet_props, "open_images")
+        col.prop(sprite_sheet_props, "open_output_directory")
+        col.prop(sprite_sheet_props, "clear_generated_images")
+        
+        col.separator(factor=3.0, type='LINE')
+        
+        # Generate Sprite Sheet Button        
+        col.operator("object.create_sprite_sheet", text="Generate Sprite Sheet")
+        
+        
+class SpriteSheetCreatorVSEPanel(Panel):
+    bl_label = "Sprite Sheet Creator"
+    bl_idname = "VSE_PT_Sprite_Sheet_Creator"
+    bl_space_type = "SEQUENCE_EDITOR"
+    bl_region_type = "UI"
+    bl_category = "Sprite Sheet Creator"
+
+    def draw(self, context):
+    
+        layout = self.layout        
+        scene = context.scene
+        sprite_sheet_props = scene.sprite_sheet_props
+
+        # Sprite Sheet Creator Section        
+        box = layout.box()
+        col = box.column(align=True)
+        row = box.row(align=True)
+        
+        col.label(text="Source:")
+        col.prop(sprite_sheet_props, "source_type")
+
+        if sprite_sheet_props.source_type == 'DIRECTORY':
+            col.separator()
+            col.label(text="Image Sequence Directory:")
+            col.prop(sprite_sheet_props, "directory")
+            
+        if sprite_sheet_props.source_type == 'VSE':
+            col.prop(sprite_sheet_props, "use_all_vse_channels")            
+            if not sprite_sheet_props.use_all_vse_channels:
+                col.prop(sprite_sheet_props, "vse_channel")
+                        
+        col.separator(factor=3.0, type='LINE')
+        
+        # Sprite Sheet Properties
+        col.label(text="Sprite Sheet Properties:")
+        
+        col.prop(sprite_sheet_props, "columns")
+        col.prop(sprite_sheet_props, "rows")        
+        
+        col.separator()
+        
+        col.prop(sprite_sheet_props, "image_width")
+        col.prop(sprite_sheet_props, "image_height")
+        
+        col.separator()
+        
+        col.prop(sprite_sheet_props, "start_frame")
+        col.prop(sprite_sheet_props, "end_frame")  
+        
+        col.separator()
+
+        col.prop(sprite_sheet_props, "is_reversed")
+
+        col.separator(factor=3.0, type='LINE')
+
+        col.label(text="Output File Name:")
+
+        row = col.row(align=True)  # New row for file name and extension
+        row.prop(sprite_sheet_props, "file_name")
+        row.prop(sprite_sheet_props, "sprite_sheet_image_format")
+        
+        col.separator()
+        
+        if sprite_sheet_props.source_type == 'VSE':  
+            col.label(text="VSE Output Directory:")
+            col.prop(sprite_sheet_props, "vse_output_path")
+            
+        if sprite_sheet_props.source_type == 'COMPOSITOR':
+            col.separator()
+            col.label(text="Compositor Output Directory:")
+            col.prop(sprite_sheet_props, "compositor_output_path")
+            
+        col.separator()
 
         col.prop(sprite_sheet_props, "file_overwrite")
         
         # col.label(text="Image Format:")
         # row.prop(sprite_sheet_props, "sprite_sheet_image_format")
+        
+        col.separator(factor=3.0, type='LINE')
+        
+        col.prop(sprite_sheet_props, "sprite_sheet_is_alpha")
+        col.prop(sprite_sheet_props, "open_images")
+        col.prop(sprite_sheet_props, "open_output_directory")
+        col.prop(sprite_sheet_props, "clear_generated_images")
+        
+        col.separator(factor=3.0, type='LINE')
+        
+        # Generate Sprite Sheet Button        
+        col.operator("object.create_sprite_sheet", text="Generate Sprite Sheet")
+        
+
+class SpriteSheetCreatorPanel(Panel):
+    bl_label = "Sprite Sheet Creator"
+    bl_idname = "VIEW3D_PT_Sprite_Sheet_Creator"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Sequenced Bake"
+
+    def draw(self, context):
+    
+        layout = self.layout        
+        scene = context.scene
+        sprite_sheet_props = scene.sprite_sheet_props
+
+        # Sprite Sheet Creator Section        
+        box = layout.box()
+        col = box.column(align=True)
+        row = box.row(align=True)
+        
+        col.label(text="Source:")
+        col.prop(sprite_sheet_props, "source_type")
+
+        if sprite_sheet_props.source_type == 'DIRECTORY':
+            col.separator()
+            col.label(text="Image Sequence Directory:")
+            col.prop(sprite_sheet_props, "directory")
+            
+        if sprite_sheet_props.source_type == 'VSE':
+            col.prop(sprite_sheet_props, "use_all_vse_channels")            
+            if not sprite_sheet_props.use_all_vse_channels:
+                col.prop(sprite_sheet_props, "vse_channel")
+                
+        
+        col.separator(factor=3.0, type='LINE')
+        
+        # Sprite Sheet Properties
+        col.label(text="Sprite Sheet Properties:")
+        
+        col.prop(sprite_sheet_props, "columns")
+        col.prop(sprite_sheet_props, "rows")        
+        
+        col.separator()
+        
+        col.prop(sprite_sheet_props, "image_width")
+        col.prop(sprite_sheet_props, "image_height")
+        
+        col.separator()
+        
+        col.prop(sprite_sheet_props, "start_frame")
+        col.prop(sprite_sheet_props, "end_frame")  
+        
+        col.separator()
+
+        col.prop(sprite_sheet_props, "is_reversed")
+
+        col.separator(factor=3.0, type='LINE')
+
+        col.label(text="Output File Name:")
+
+        row = col.row(align=True)  # New row for file name and extension
+        row.prop(sprite_sheet_props, "file_name")
+        row.prop(sprite_sheet_props, "sprite_sheet_image_format")
+        
+        col.separator()
+        
+        if sprite_sheet_props.source_type == 'VSE':  
+            col.label(text="VSE Output Directory:")
+            col.prop(sprite_sheet_props, "vse_output_path")
+            
+        if sprite_sheet_props.source_type == 'COMPOSITOR':
+            col.separator()
+            col.label(text="Compositor Output Directory:")
+            col.prop(sprite_sheet_props, "compositor_output_path")
+            
+        col.separator()
+
+        col.prop(sprite_sheet_props, "file_overwrite")
         
         col.separator(factor=3.0, type='LINE')
         
@@ -207,14 +466,26 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         self._props = context.scene.sprite_sheet_props
         self._sb_props = context.scene.sequenced_bake_props
 
+        if self._props.source_type == 'DIRECTORY':
+            return self.execute_directory(context)
+        elif self._props.source_type == 'VSE':
+            return self.execute_vse(context)
+        elif self._props.source_type == 'COMPOSITOR':
+            return self.execute_compositor(context)
+        
+    def execute_directory(self, context):
         # Get the sprite sheet directory
+        props = self._props
+        if props.source_type == 'VSE':
+            directory = bpy.path.abspath(props.vse_output_path)
+        else:
+            directory = bpy.path.abspath(props.directory)
+
         directory = bpy.path.abspath(self._props.directory)
+
         if not directory:
-            self.report({'WARNING'}, "No image sequence directory provided, Defaulting to Material Output Path.")
-            directory = bpy.path.abspath(self._sb_props.sequenced_bake_output_path)
-            if not directory:
-                self.report({'ERROR'}, "A material output path was not provided.")
-                return {"CANCELED"}
+            self.report({'ERROR'}, "No image sequence directory specified")
+            return {'CANCELLED'}
 
         # Check for subdirectories
         subdirs = [os.path.join(directory, subdir) for subdir in os.listdir(directory) if os.path.isdir(os.path.join(directory, subdir))]
@@ -240,7 +511,161 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
         self._timer = wm.event_timer_add(0.1, window=context.window)
         wm.modal_handler_add(self)
         return {'RUNNING_MODAL'}
+        
+    def execute_vse(self, context):
+        # Safety: ensure no modal timer is running
+        if not self._props.vse_output_path:
+            self.report({'ERROR'}, "VSE Output Path is required")
+            return {'CANCELLED'}
+    
+        if self._timer:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
 
+        images = self.load_vse_frames(context)
+
+        if self._props.is_reversed:
+            images.reverse()
+
+        return self.process_images(images, "VSE")
+        
+    def execute_compositor(self, context):
+        props = self._props
+        sb_props = self._sb_props
+
+        if not props.compositor_output_path:
+            self.report({'ERROR'}, "Compositor Output Path is required")
+            return {'CANCELLED'}
+
+        images = self.load_compositor_frames(context)
+
+        if props.is_reversed:
+            images.reverse()
+
+        return self.process_images(images, "COMPOSITOR")
+        
+    
+    def load_compositor_frames(self, context):
+        scene = context.scene
+        start = self._props.start_frame
+        end = self._props.end_frame
+
+        images = []
+
+        output_dir = bpy.path.abspath(self._props.compositor_output_path)
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Store original render settings
+        original_filepath = scene.render.filepath
+        original_format = scene.render.image_settings.file_format
+        original_res_x = scene.render.resolution_x
+        original_res_y = scene.render.resolution_y
+        original_res_percent = scene.render.resolution_percentage
+
+        # Set render settings to match sprite sheet cell
+        scene.render.image_settings.file_format = 'PNG'
+        scene.render.resolution_x = self._props.image_width
+        scene.render.resolution_y = self._props.image_height
+        scene.render.resolution_percentage = 100
+
+        for frame in range(start, end + 1):
+            scene.frame_set(frame)
+            temp_path = os.path.join(output_dir, f"compositor_frame_{frame:05d}.png")
+            scene.render.filepath = temp_path
+
+            # Render frame at correct size
+            bpy.ops.render.render(write_still=True)
+
+            if os.path.exists(temp_path):
+                img = bpy.data.images.load(temp_path)
+                img.name = f"Compositor_Frame_{frame}"
+                images.append(img)
+            else:
+                self.report({'WARNING'}, f"Failed to render compositor frame {frame}")
+
+        # Restore original render settings
+        scene.render.filepath = original_filepath
+        scene.render.image_settings.file_format = original_format
+        scene.render.resolution_x = original_res_x
+        scene.render.resolution_y = original_res_y
+        scene.render.resolution_percentage = original_res_percent
+
+        return images
+    
+    def load_vse_frames(self, context):
+        scene = context.scene
+        props = self._props
+
+        start = props.start_frame
+        end = props.end_frame
+        channel = props.vse_channel
+
+        images = []
+
+        # Ensure sequence editor exists
+        seq = scene.sequence_editor
+        if seq is None:
+            seq = scene.sequence_editor_create()
+
+        # Get all strips
+        strips = seq.strips_all
+        if not strips:
+            self.report({'ERROR'}, "No strips found in the Video Sequencer")
+            return images
+
+        # Determine which strips to use
+        if props.use_all_vse_channels:
+            strips_to_render = [s for s in strips if not s.mute]  # all enabled strips
+        else:
+            strips_to_render = [s for s in strips if s.channel == channel]
+
+        if not strips_to_render:
+            msg = "No strips found in the VSE"
+            msg += "" if props.use_all_vse_channels else f" channel {channel}"
+            self.report({'ERROR'}, msg)
+            return images
+
+        # Store original mute states if using a specific channel
+        original_mute = {}
+        if not props.use_all_vse_channels:
+            for strip in strips:
+                original_mute[strip] = strip.mute
+                strip.mute = (strip.channel != channel)
+
+        temp_dir = bpy.app.tempdir
+        os.makedirs(temp_dir, exist_ok=True)
+
+        original_filepath = scene.render.filepath
+        original_format = scene.render.image_settings.file_format
+        scene.render.image_settings.file_format = 'PNG'
+
+        try:
+            for frame in range(start, end + 1):
+                scene.frame_set(frame)
+                temp_path = os.path.join(temp_dir, f"vse_frame_{frame:05d}.png")
+                scene.render.filepath = temp_path
+
+                bpy.ops.render.render(write_still=True)
+
+                if os.path.exists(temp_path):
+                    img = bpy.data.images.load(temp_path)
+                    img.name = f"VSE_Frame_{frame}"
+                    images.append(img)
+                else:
+                    self.report({'WARNING'}, f"Failed to render VSE frame {frame}")
+
+        finally:
+            # Restore render settings
+            scene.render.filepath = original_filepath
+            scene.render.image_settings.file_format = original_format
+
+            # Restore mute states if using a single channel
+            if not props.use_all_vse_channels:
+                for strip, mute in original_mute.items():
+                    strip.mute = mute
+
+        return images
+        
 
     def modal(self, context, event):
         if event.type == 'ESC':
@@ -315,223 +740,184 @@ class OBJECT_OT_CreateSpriteSheet(Operator):
                     bpy.data.images.remove(image)
         except Exception as err:
             self.report({'INFO'}, f"remove_images: {err}")
+    
+    def process_images(self, images, output_name):
+        if not images:
+            self.report({'WARNING'}, "No images provided to process_images()")
+            return {'CANCELLED'}
+
+        props = self._props
+        sb_props = self._sb_props
+
+        # Resolve output directory
+        if props.source_type == 'DIRECTORY':
+            directory = bpy.path.abspath(props.directory)
+        elif props.source_type == 'VSE':
+            directory = bpy.path.abspath(props.vse_output_path)
+        elif props.source_type == 'COMPOSITOR':
+            directory = bpy.path.abspath(props.compositor_output_path)
+        else:
+            directory = bpy.path.abspath(props.directory)
+
+        if not directory:
+            self.report({'ERROR'}, "No output directory specified")
+            return {'CANCELLED'}
+
+        columns = props.columns
+        rows = props.rows
+        image_width = props.image_width
+        image_height = props.image_height
+        start_frame = props.start_frame
+        end_frame = props.end_frame
+        sprite_sheet_is_alpha = props.sprite_sheet_is_alpha
+        sprite_sheet_image_format = props.sprite_sheet_image_format
+        open_images = props.open_images
+        open_output_directory = props.open_output_directory
+        clear_generated_images = props.clear_generated_images
+
+        label_reversed = "_Reversed" if props.is_reversed else ""
+
+        # Clamp frame range
+        start_index = max(0, start_frame - 1)
+        end_index = min(len(images) - 1, end_frame - 1)
+
+        # Create sprite sheet image
+        sprite_sheet = bpy.data.images.new(
+            name=f"{output_name}_sprite_sheet",
+            width=columns * image_width,
+            height=rows * image_height,
+            alpha=sprite_sheet_is_alpha
+        )
+
+        sprite_sheet.pixels = [0.0] * (columns * image_width * rows * image_height * 4)
+
+        pixels = np.zeros(
+            (rows * image_height, columns * image_width, 4),
+            dtype=np.float32
+        )
+
+        position_index = 0
+
+        for index in range(start_index, end_index + 1):
+            if position_index >= columns * rows:
+                break
+
+            img = images[index]
+            generated_images.append(img.name)
+
+            x = (position_index % columns) * image_width
+            y = (position_index // columns) * image_height
+
+            original_width, original_height = img.size
+            scale_x = image_width / original_width
+            scale_y = image_height / original_height
+
+            scaled_image = bpy.data.images.new(
+                name=f"scaled_{output_name}_{index}",
+                width=image_width,
+                height=image_height,
+                alpha=True
+            )
+
+            generated_images.append(scaled_image.name)
+
+            original_pixels = np.array(
+                img.pixels[:],
+                dtype=np.float32
+            ).reshape((original_height, original_width, 4))
+
+            scaled_pixels = np.zeros(
+                (image_height, image_width, 4),
+                dtype=np.float32
+            )
+
+            for j in range(image_height):
+                for i in range(image_width):
+                    src_x = min(int(i / scale_x), original_width - 1)
+                    src_y = min(int(j / scale_y), original_height - 1)
+                    scaled_pixels[j, i] = original_pixels[src_y, src_x]
+
+            scaled_image.pixels = scaled_pixels.flatten()
+
+            pixels[
+                pixels.shape[0] - y - image_height : pixels.shape[0] - y,
+                x : x + image_width
+            ] = scaled_pixels
+
+            position_index += 1
+
+        sprite_sheet.pixels = pixels.flatten()
+
+        # File naming
+        filename = props.file_name.strip()
+        if not filename:
+            base_name = f"{output_name}_SpriteSheet{label_reversed}"
+        else:
+            base_name = filename
+
+        if base_name.lower().endswith(f".{sprite_sheet_image_format}"):
+            base_name = os.path.splitext(base_name)[0]
+
+        ext = f".{sprite_sheet_image_format}"
+        sprite_sheet_path = os.path.join(directory, base_name + ext)
+
+        # Overwrite handling
+        if os.path.exists(sprite_sheet_path) and not props.file_overwrite:
+            counter = 1
+            new_base = base_name
+            while os.path.exists(os.path.join(directory, new_base + ext)):
+                new_base = f"{base_name} ({counter})"
+                counter += 1
+            sprite_sheet_path = os.path.join(directory, new_base + ext)
+
+        sprite_sheet.filepath_raw = sprite_sheet_path
+        sprite_sheet.save()
+
+        if clear_generated_images:
+            pattern = re.compile(r'^scaled_')
+            for image in list(bpy.data.images):
+                if pattern.search(image.name):
+                    bpy.data.images.remove(image)
+
+        bpy.ops.image.open(filepath=sprite_sheet_path)
+
+        if open_output_directory:
+            self.open_directory(sprite_sheet_path)
+
+        self.report({'INFO'}, f"Sprite sheet saved: {sprite_sheet_path}")
+        generated_images.clear()
+
+        return {'FINISHED'}
+
 
     def process_subdir(self, subdir_path):
-    
-        # file_names = os.listdir(subdir_path)
-        
-        # Filter and delte priviously generated sprite sheets before creating another one
-        # non_numeric_files = [f for f in file_names if not f.split('.')[0].isdigit()]
-        # if non_numeric_files:
-        #     # Assuming we want to delete the first non-numeric file found
-        #     file_to_delete = non_numeric_files[0]
-        #     file_path = os.path.join(subdir_path, file_to_delete)
-        #
-        #     # Delete the file
-        #     os.remove(file_path)
-
-        # Refresh the file list after removing any generated sprite sheets.
         file_names = os.listdir(subdir_path)
 
-        # Filter: only include files where the part before the extension is an integer
         image_files = []
         for f in file_names:
-            name, ext = os.path.splitext(f)
+            name, _ = os.path.splitext(f)
             try:
-                int(name)  # Try converting to int
+                int(name)
                 image_files.append(f)
             except ValueError:
-                continue  # Skip files with non-integer names
+                continue
 
-        # Defined if the sequence is going to be reversed or not.
-        is_reversed = self._props.is_reversed
-        label_reversed = "_Reversed" if is_reversed else ""
+        if not image_files:
+            self.report({'WARNING'}, f"No images found in {subdir_path}")
+            return {'CANCELLED'}
 
-        # Sort files numerically by the integer part before the extension
         image_files_sorted = sorted(
             image_files,
             key=lambda x: int(os.path.splitext(x)[0]),
-            reverse=is_reversed
+            reverse=self._props.is_reversed
         )
-        
-        # Debug info
-        # print(f" ")
-        # print(f"~~~~~~~~~~~~~~ LOADED IMAGES ~~~~~~~~~~~~~~")
-        # print(f"Image File List Count: {len(image_files_sorted)}")
-        # print(f"Image Files Sort Order: {image_files_sorted}")
 
         images = []
         for filename in image_files_sorted:
             img_path = os.path.join(subdir_path, filename)
-            image = bpy.data.images.load(img_path)
-            images.append(image)
+            images.append(bpy.data.images.load(img_path))
 
+        output_name = os.path.basename(subdir_path) or self.directory_name
 
-        if not images:
-            self.report({'WARNING'}, f"No images found in {subdir_path}, skipping.")  
-            return {'CANCELLED'}
-        
-        # Get the current settings
-        directory = bpy.path.abspath(self._props.directory) 
-        if not directory:
-            self.report({'ERROR'}, "No image sequence directory provided, Defaulting to Material Output Path.")            
-            directory = bpy.path.abspath(self._sb_props.sequenced_bake_output_path)
-            if not directory:
-                self.report({'ERROR'}, "Material output was not provided")
-                return {'CANCELLED'}
-
-        # Get sprite sheet properties
-        columns = self._props.columns
-        rows = self._props.rows
-        image_width = self._props.image_width
-        image_height = self._props.image_height
-        start_frame = self._props.start_frame
-        end_frame = self._props.end_frame
-        total_frames = end_frame - start_frame + 1
-        sprite_sheet_is_alpha = self._props.sprite_sheet_is_alpha
-        sprite_sheet_image_format = self._props.sprite_sheet_image_format
-        open_images = self._props.open_images
-        open_output_directory = self._props.open_output_directory
-        clear_generated_images = self._props.clear_generated_images
-        
-        subdir_name = os.path.basename(subdir_path)
-        if not subdir_name:
-            subdir_name = self.directory_name
-        
-        # Create new sprite sheet image
-        sprite_sheet = bpy.data.images.new(
-            name=f"{subdir_name}_sprite_sheet",
-            width=columns * image_width,
-            height=rows * image_height,
-            alpha=sprite_sheet_is_alpha
-            )
-            
-        sprite_sheet.pixels = [0] * (columns * image_width * rows * image_height * 4)
-
-        # Initialize pixels array
-        pixels = np.zeros((rows * image_height, columns * image_width, 4), dtype=np.float32)
-        
-        # Positioning index for the sprite sheet
-        position_index = 0
-
-        # TODO: Update this forloop to use multi-threading to prevent the UI from freezing.
-        for index, img in enumerate(images):
-            
-            # Add the images to the list.
-            generated_images.append(img.name)
-            
-            if start_frame-1 <= index <= end_frame-1:                
-                x = (position_index % columns) * image_width
-                y = (position_index // columns) * image_height
-
-                # Calculate scaling factors
-                original_width, original_height = img.size
-                scale_x = image_width / original_width
-                scale_y = image_height / original_height
-
-                # Create a new image for the scaled version
-                scaled_image = bpy.data.images.new(f"scaled_{index}", width=image_width, height=image_height)
-                scaled_pixels = np.zeros((image_height, image_width, 4), dtype=np.float32)
-                
-                # Add the generated image to the list.
-                generated_images.append(scaled_image)
-                
-                # Load original image pixels
-                original_pixels = np.array(img.pixels[:], dtype=np.float32).reshape((original_height, original_width, 4))
-                
-                for j in range(image_height):
-                    for i in range(image_width):
-                        src_x = min(int(i / scale_x), original_width - 1)
-                        src_y = min(int(j / scale_y), original_height - 1)
-                        scaled_pixels[j, i, :] = original_pixels[src_y, src_x, :]
-
-                scaled_image.pixels = scaled_pixels.flatten()
-
-                # Place the scaled image onto the sprite sheet
-                pixels[pixels.shape[0] - y - image_height:pixels.shape[0] - y, x:x + image_width] = scaled_pixels
-                
-                # Increment the position index
-                position_index += 1
-                # bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
-
-        # Update sprite sheet with new pixel data
-        sprite_sheet.pixels = pixels.flatten()
-
-        filename = self._props.file_name.strip()
-        if not filename:
-            base_name = f"{subdir_name}_SpriteSheet{label_reversed}"
-        else:
-            base_name = filename
-
-        # Ensure no duplicate extension
-        if base_name.lower().endswith(f".{sprite_sheet_image_format.lower()}"):
-            base_name = os.path.splitext(base_name)[0]
-
-        # Build initial file name
-        ext = f".{sprite_sheet_image_format}"
-        file_name = base_name + ext
-        sprite_sheet_path = os.path.join(directory, file_name)
-
-        self.report({'INFO'}, f"Initial File Path: {sprite_sheet_path}")
-
-        # Handle overwriting and name increment
-        if os.path.exists(sprite_sheet_path):
-            if self._props.file_overwrite:
-                self.report({'INFO'}, f"Overwriting is enabled. Cleaning directory: {directory}")
-
-                for f in os.listdir(directory):
-                    file_path = os.path.join(directory, f)
-
-                    if os.path.isfile(file_path) and f not in image_files_sorted:
-                        try:
-                            os.remove(file_path)
-                            self.report({'INFO'}, f"Removed: {file_path}")
-                        except Exception as e:
-                            self.report({'ERROR'}, f"Failed to remove {file_path}: {e}")
-            else:
-                # Find a unique file name by appending/incrementing a number
-                counter = 1
-                new_base = base_name
-                while os.path.exists(os.path.join(directory, new_base + ext)):
-                    match = re.search(r"^(.*) \((\d+)\)$", base_name)
-                    if match:
-                        name_part = match.group(1)
-                        counter = int(match.group(2)) + 1
-                        new_base = f"{name_part} ({counter})"
-                    else:
-                        new_base = f"{base_name} ({counter})"
-                    counter += 1
-
-                file_name = new_base + ext
-                sprite_sheet_path = os.path.join(directory, file_name)
-                self.report({'INFO'}, f"File exists. New file path: {sprite_sheet_path}")
-
-        # Set and save file
-        sprite_sheet.filepath_raw = sprite_sheet_path
-        sprite_sheet.save()
-        
-        # Clear the generated sprite sheets from the image list.
-        if clear_generated_images:
-            # Get the list of all images in the Blender file
-            images = bpy.data.images
-            
-            # Regular expression pattern to match images with just a number or containing 'scaled_'
-            pattern = re.compile(r'^\d+\.png(?:\.\d+)?$|scaled_')
-            for image in list(images):
-                if pattern.search(image.name):
-                    bpy.data.images.remove(image)
-        
-        # Open the generated sprite sheet in the image viewer
-        bpy.ops.image.open(filepath=sprite_sheet_path)
-        self.report({'INFO'}, f"Sprite sheet created and saved at: {sprite_sheet_path}")
-               
-        if len(generated_images) == self._subdir_count:
-            if open_images:
-                self.open_images(generated_images)            
-            
-            if open_output_directory:
-                self.open_directory(directory)                
-            
-            #Clear the list of image paths
-            generated_images.clear()
+        return self.process_images(images, output_name)
 

@@ -16,7 +16,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 0, 14),
+    "version": (1, 0, 15),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -32,8 +32,11 @@ from .sequenced_bake import (
     SequencedBakeOperator,
 )
 from .sprite_sheet_creator import (
-    SpriteSheetProperties,
     SpriteSheetCreatorPanel,
+    SpriteSheetCreatorNode,
+    SpriteSheetCreatorSocket,
+    SpriteSheetCreatorVSEPanel,
+    SpriteSheetProperties,
     OBJECT_OT_CreateSpriteSheet,
 )
 from bpy.types import (
@@ -82,6 +85,7 @@ def remove_custom_node_category():
 def draw_custom_node_menu(self, context):
     layout = self.layout
     layout.operator("node.add_node", text="Sequenced Bake").type = "ShaderNodeSequencedBake"
+    layout.operator("node.add_node", text="Sprite Sheet Creator").type = "ShaderNodeSpriteSheetCreatorNode"
 
 def register():
     bpy.utils.register_class(SequencedBakeAddonProperties)
@@ -96,6 +100,9 @@ def register():
     bpy.types.ShaderNode.sequenced_bake_props = bpy.props.PointerProperty(type=SequencedBakeProperties)
     
     # Register Sprite Sheet components
+    bpy.utils.register_class(SpriteSheetCreatorVSEPanel)
+    bpy.utils.register_class(SpriteSheetCreatorNode)
+    bpy.utils.register_class(SpriteSheetCreatorSocket)
     bpy.utils.register_class(SpriteSheetCreatorPanel)
     bpy.utils.register_class(SpriteSheetProperties)
     bpy.types.Scene.sprite_sheet_props = bpy.props.PointerProperty(type=SpriteSheetProperties)
@@ -117,6 +124,9 @@ def unregister():
     del bpy.types.Scene.sequenced_bake_props
     
     # Unregister Sprite Sheet components
+    bpy.utils.unregister_class(SpriteSheetCreatorVSEPanel)
+    bpy.utils.unregister_class(SpriteSheetCreatorNode)
+    bpy.utils.unregister_class(SpriteSheetCreatorSocket)
     bpy.utils.unregister_class(SpriteSheetCreatorPanel)
     bpy.utils.unregister_class(SpriteSheetProperties)
     bpy.utils.unregister_class(OBJECT_OT_CreateSpriteSheet)
