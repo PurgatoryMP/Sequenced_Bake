@@ -16,6 +16,7 @@
 import bpy
 import os
 import re
+import sys
 from bpy.types import (
     Operator,
     Panel,
@@ -77,6 +78,40 @@ class SequencedBakeProperties(PropertyGroup):
         description="Clears the baked maps from blenders image viewer list",
         default=True
     )
+    sequenced_selected_to_active: bpy.props.BoolProperty( 
+        name="Selected to Active",
+        description='Enable to bake from the selected object into the active one',
+        default=False
+    )
+
+    # Selected to Active options.
+    selected_to_active_cage: bpy.props.BoolProperty(
+        name="Cage",
+        description='Cast rays to active object from a cage',
+        default=False
+    )
+    selected_to_active_cage_object: bpy.props.PointerProperty(
+        name="Cage Object",
+        description='Object to use as cage',
+        type=bpy.types.Object
+    )
+    selected_to_active_extrusion: bpy.props.FloatProperty(
+        name="Extrusion",
+        description='Inflate the active object by the specified distance for baking',
+        default=0.0,
+        min=0.0,
+        max=sys.float_info.max,
+        unit='LENGTH'
+    )
+    selected_to_active_max_ray_distance: bpy.props.FloatProperty(
+        name="Max Ray Distance",
+        description='The maximum ray distance for matching points between the active and selected objects. If zero, there is no limit',
+        default=0.0,
+        min=0.0,
+        max=sys.float_info.max,
+        unit='LENGTH'
+    )
+    
     sequenced_bake_normal: bpy.props.BoolProperty(
         name="Normal",
         description='Enable to bake the normal map for the selected objects active material',
@@ -370,7 +405,7 @@ class SequencedBakeProperties(PropertyGroup):
         ],
         default='sRGB'
     )
-
+    
     # Image texture settings.
     interpolation: bpy.props.EnumProperty(
         name="Interpolation",
@@ -485,6 +520,33 @@ class SequencedBakePanel(Panel):
         col.prop(sequenced_bake_props, "sequence_is_alpha")
         col.prop(sequenced_bake_props, "sequence_use_float")
         col.prop(sequenced_bake_props, "sequence_clear_baked_maps")
+
+        col.separator(factor=3.0, type='LINE')
+
+        col.label(text="Selected to Active:")
+        col.prop(sequenced_bake_props, "sequenced_selected_to_active")         
+
+        # Expand additional options if selected to active is selected
+        if sequenced_bake_props.sequenced_selected_to_active:
+            col.label(text="Selected to Active Options:")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequenced_bake_props, "selected_to_active_cage")
+
+            # Expand cage object selector if cage is selected
+            if sequenced_bake_props.selected_to_active_cage:
+                row = col.row()
+                row.separator(factor=option_padding)
+                row.prop(sequenced_bake_props, "selected_to_active_cage_object")
+                
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequenced_bake_props, "selected_to_active_extrusion")
+                        
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequenced_bake_props, "selected_to_active_max_ray_distance")
 
         col.separator(factor=3.0, type='LINE')
 
@@ -829,7 +891,7 @@ class SequencedBakeOperator(Operator):
     def execute(self, context):
 
         if bpy.context.scene.render.engine == 'CYCLES':
-
+            
             self._props = bpy.context.scene.sequenced_bake_props
 
             # Define the root directory.
@@ -1025,12 +1087,27 @@ class SequencedBakeOperator(Operator):
                     except Exception as e:
                         self.report({'WARNING'}, f"Sequencer color space '{props.sequencer}' not applied: {str(e)}")
 
-                        # Bake the texture
+                    # Bake the texture
                     try:
+                        cage_object_name = ""
+                        if self._props.selected_to_active_cage:
+                            if self._props.selected_to_active_cage_object is not None:
+                                cage_object_name = self._props.selected_to_active_cage_object.name
+                            
                         if bake_type == "METALLIC":
-                            bpy.ops.object.bake(type="EMIT")
+                            bpy.ops.object.bake(type="EMIT",
+                                                use_selected_to_active=self._props.sequenced_selected_to_active,
+                                                cage_extrusion=self._props.selected_to_active_extrusion,
+                                                max_ray_distance=self._props.selected_to_active_max_ray_distance,
+                                                cage_object=cage_object_name
+                                                )
                         else:
-                            bpy.ops.object.bake(type=bake_type)
+                            bpy.ops.object.bake(type=bake_type,
+                                                use_selected_to_active=self._props.sequenced_selected_to_active,
+                                                cage_extrusion=self._props.selected_to_active_extrusion,
+                                                max_ray_distance=self._props.selected_to_active_max_ray_distance,
+                                                cage_object=cage_object_name
+                                                )
                     except Exception as error:
                         self.report({'ERROR'},
                                     f"There was an error while attempting to bake the {bake_type} map. Error: {error.args}")
