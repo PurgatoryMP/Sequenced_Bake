@@ -733,6 +733,33 @@ class SequencedBakeNode(Node):
 
         col.separator(factor=3.0, type='LINE')
 
+        col.label(text="Selected to Active:")
+        col.prop(sequenced_bake_props, "sequenced_selected_to_active")
+
+        # Expand additional options if selected to active is selected
+        if sequenced_bake_props.sequenced_selected_to_active:
+            col.label(text="Selected to Active Options:")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequenced_bake_props, "selected_to_active_cage")
+
+            # Expand cage object selector if cage is selected
+            if sequenced_bake_props.selected_to_active_cage:
+                row = col.row()
+                row.separator(factor=option_padding)
+                row.prop(sequenced_bake_props, "selected_to_active_cage_object")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequenced_bake_props, "selected_to_active_extrusion")
+
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(sequenced_bake_props, "selected_to_active_max_ray_distance")
+
+        col.separator(factor=3.0, type='LINE')
+
         col.label(text="Image Texture Settings:")
         col.prop(sequenced_bake_props, "interpolation")
         col.prop(sequenced_bake_props, "projection")
@@ -1085,7 +1112,7 @@ class SequencedBakeOperator(Operator):
                     try:
                         bpy.context.scene.sequencer_colorspace_settings.name = self._props.sequencer
                     except Exception as e:
-                        self.report({'WARNING'}, f"Sequencer color space '{props.sequencer}' not applied: {str(e)}")
+                        self.report({'WARNING'}, f"Sequencer color space '{self._props.sequencer}' not applied: {str(e)}")
 
                     # Bake the texture
                     try:
