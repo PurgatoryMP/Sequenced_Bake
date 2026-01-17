@@ -25,6 +25,363 @@ from bpy.types import (
     PropertyGroup,
 )
 
+IMAGE_FORMAT_ITEMS = [
+    ("PNG", "PNG", "Save as PNG"),
+    ("JPEG", "JPEG", "Save as JPEG"),
+    ("BMP", "BMP", "Save as BMP"),
+    ("TIFF", "TIFF", "Save as TIFF"),
+    ("TGA", "TGA", "Save as TGA"),
+    ("EXR", "OpenEXR", "Save as OpenEXR"),
+    ("HDR", "Radiance HDR", "Save as Radiance HDR"),
+    ("CINEON", "Cineon", "Save as Cineon"),
+    ("DPX", "DPX", "Save as DPX"),
+]
+
+NORMAL_MAP_SPACE_ITEMS = [
+    ('OBJECT', "Object", "Use object space for the normal map"),
+    ('TANGENT', "Tangent", "Use tangent space for the normal map"),
+]
+
+NORMAL_MAP_SWIZZLE_ITEMS = [
+    ("POS_X", '+X', "Positive X axis"),
+    ("POS_Y", '+Y', "Positive Y axis"),
+    ("POS_Z", '+Z', "Positive Z axis"),
+    ("NEG_X", '-X', "Negative X axis"),
+    ("NEG_Y", '-Y', "Negative Y axis"),
+    ("NEG_Z", '-Z', "Negative Z axis"),
+]
+
+SEQUENCER_COLORSPACE_ITEMS = [
+    (
+        "ACES2065-1",
+        "ACES2065-1",
+        "ACES interchange colorspace (scene-linear, archival and exchange)"
+    ),
+    (
+        "ACEScg",
+        "ACEScg",
+        "ACES scene-linear working space for CG rendering and compositing"
+    ),
+    (
+        "AgX Base_Display_P3",
+        "AgX Base Display P3",
+        "AgX base working space targeting Display P3 gamut"
+    ),
+    (
+        "AgX Base_Rec_1886",
+        "AgX Base Rec.1886",
+        "AgX base working space targeting Rec.1886 broadcast displays"
+    ),
+    (
+        "AgX Base_Rec_2020",
+        "AgX Base Rec.2020",
+        "AgX base working space targeting wide-gamut Rec.2020"
+    ),
+    (
+        "AgX Base_sRGB",
+        "AgX Base sRGB",
+        "AgX base working space targeting standard sRGB displays"
+    ),
+    (
+        "AgX Log",
+        "AgX Log",
+        "AgX logarithmic colorspace for grading and tone mapping"
+    ),
+    (
+        "Display P3",
+        "Display P3",
+        "Display-referred P3 colorspace (non-linear)"
+    ),
+    (
+        "Filmic Log",
+        "Filmic Log",
+        "Logarithmic Filmic colorspace for grading workflows"
+    ),
+    (
+        "Filmic sRGB",
+        "Filmic sRGB",
+        "Filmic tone-mapped output in sRGB display space"
+    ),
+    (
+        "Khronos PBR Neutral sRGB",
+        "Khronos PBR Neutral sRGB",
+        "Khronos PBR Neutral display-referred colorspace in sRGB"
+    ),
+    (
+        "Linear CIE XYZ D65",
+        "Linear CIE-XYZ D65",
+        "Scene-linear CIE XYZ colorspace using D65 white point"
+    ),
+    (
+        "Linear CIE XYZ E",
+        "Linear CIE-XYZ E",
+        "Scene-linear CIE XYZ colorspace using equal-energy white point"
+    ),
+    (
+        "Linear DCI P3 D65",
+        "Linear DCI-P3 D65",
+        "Scene-linear DCI-P3 colorspace with D65 white point"
+    ),
+    (
+        "Linear FilmLight E Gamut",
+        "Linear FilmLight E-Gamut",
+        "Scene-linear FilmLight E-Gamut colorspace (high-end VFX)"
+    ),
+    (
+        "Linear Rec.2020",
+        "Linear Rec.2020",
+        "Scene-linear Rec.2020 wide-gamut working space"
+    ),
+    (
+        "Linear Rec.709",
+        "Linear Rec.709",
+        "Scene-linear Rec.709 working space (linear sRGB primaries)"
+    ),
+    (
+        "Non-Color",
+        "Non-Color",
+        "Data colorspace (no color transform; masks, mattes, data)"
+    ),
+    (
+        "Rec.1886",
+        "Rec.1886",
+        "Display-referred Rec.1886 broadcast colorspace"
+    ),
+    (
+        "Rec.2020",
+        "Rec.2020",
+        "Display-referred Rec.2020 wide-gamut colorspace"
+    ),
+    (
+        "sRGB",
+        "sRGB",
+        "Standard display-referred sRGB colorspace (default)"
+    ),
+]
+
+
+DISPLAY_DEVICE_ITEMS = [
+    (
+        "sRGB",
+        "sRGB",
+        "Standard dynamic range display device (default; OCIO standard)"
+    ),
+    (
+        "Display P3",
+        "Display P3",
+        "Wide-gamut P3 display device (OCIO; typically Apple displays)"
+    ),
+    (
+        "Rec.1886",
+        "Rec.1886",
+        "Broadcast SDR display device (gamma-based television standard)"
+    ),
+    (
+        "Rec.2020",
+        "Rec.2020",
+        "Wide-gamut SDR display device (BT.2020 color primaries)"
+    ),
+    (
+        "Rec.2100 PQ",
+        "Rec.2100 PQ",
+        "HDR display device using Perceptual Quantizer transfer function (OCIO-dependent)"
+    ),
+    (
+        "Rec.2100 HLG",
+        "Rec.2100 HLG",
+        "HDR display device using Hybrid Log-Gamma transfer function (OCIO-dependent)"
+    ),
+]
+
+VIEW_TRANSFORM_ITEMS = [
+    (
+        "Standard",
+        "Standard",
+        "Display-referred view with no tone mapping (linear to display conversion only)"
+    ),
+    (
+        "Khronos PBR Neutral",
+        "Khronos PBR Neutral",
+        "Physically based neutral tone mapper for PBR workflows (Khronos reference)"
+    ),
+    (
+        "AgX",
+        "AgX",
+        "Modern high-dynamic-range tone mapping view (default in Blender 5.0)"
+    ),
+    (
+        "Filmic",
+        "Filmic",
+        "Legacy Filmic tone mapping for high dynamic range scenes"
+    ),
+    (
+        "Filmic Log",
+        "Filmic Log",
+        "Logarithmic Filmic view for grading and compositing workflows"
+    ),
+    (
+        "False Color",
+        "False Color",
+        "Diagnostic view showing exposure and luminance ranges"
+    ),
+    (
+        "Raw",
+        "Raw",
+        "Unprocessed scene-linear values with no view transform applied"
+    ),
+]
+
+LOOK_ITEMS = [
+    ('None', 'None', 'No artistic look (AgX only)'),
+    ('Punchy', 'Punchy',
+     'AgX only — increased contrast and saturation'),
+    ('Greyscale', 'Greyscale',
+     'AgX only — monochrome output'),
+    ('Very High Contrast', 'Very High Contrast',
+     'AgX only — very strong contrast curve'),
+    ('High Contrast', 'High Contrast',
+     'AgX only — strong contrast curve'),
+    ('Medium High Contrast', 'Medium High Contrast',
+     'AgX only — moderately strong contrast'),
+    ('Base Contrast', 'Base Contrast',
+     'AgX only — default AgX contrast'),
+    ('Medium Low Contrast', 'Medium Low Contrast',
+     'AgX only — slightly reduced contrast'),
+    ('Low Contrast', 'Low Contrast',
+     'AgX only — low contrast look'),
+    ('Very Low Contrast', 'Very Low Contrast',
+     'AgX only — minimal contrast'),
+]
+
+INTERPOLATION_ITEMS = [
+    ('Linear', "Linear", "Use linear interpolation"),
+    ('Closest', "Closest", "Use nearest neighbor interpolation"),
+    ('Cubic', "Cubic", "Use cubic interpolation"),
+    ('Smart', "Smart", "Use smart interpolation"),
+]
+
+PROJECTION_ITEMS = [
+    ('Flat', "Flat", "Flat projection"),
+    ('Box', "Box", "Box projection"),
+    ('Square', "Square", "Square projection"),
+    ('Tube', "Tube", "Tube projection"),
+]
+
+EXTENSION_ITEMS = [
+    ('Repeat', "Repeat", "Repeat the texture"),
+    ('Extend', "Extend", "Extend the texture edges"),
+    ('Clip', "Clip", "Clip the texture to the image bounds"),
+    ('Mirror', "Mirror", "Mirror the texture"),
+]
+
+COLOR_SPACE_ITEMS = [
+    (
+        "ACES2065-1",
+        "ACES2065-1",
+        "ACES interchange color space for archival and data exchange (very wide gamut)"
+    ),
+    (
+        "ACEScg",
+        "ACEScg",
+        "ACES scene-linear working space optimized for CG rendering and compositing"
+    ),
+    (
+        "AgX Base_Display_P3",
+        "AgX Base Display P3",
+        "AgX base rendering space targeting Display P3 primaries"
+    ),
+    (
+        "AgX Base_Rec_1886",
+        "AgX Base Rec.1886",
+        "AgX base rendering space targeting Rec.1886 display characteristics"
+    ),
+    (
+        "AgX Base_Rec_2020",
+        "AgX Base Rec.2020",
+        "AgX base rendering space targeting Rec.2020 wide-gamut displays"
+    ),
+    (
+        "AgX Base_sRGB",
+        "AgX Base sRGB",
+        "AgX base rendering space targeting standard sRGB displays"
+    ),
+    (
+        "AgX Log",
+        "AgX Log",
+        "Logarithmic AgX space intended for grading and intermediate color work"
+    ),
+    (
+        "Display P3",
+        "Display P3",
+        "Display-referred P3 color space commonly used by Apple devices"
+    ),
+    (
+        "Filmic Log",
+        "Filmic Log",
+        "Logarithmic Filmic space for color grading and compositing workflows"
+    ),
+    (
+        "Filmic sRGB",
+        "Filmic sRGB",
+        "Filmic tone-mapped output encoded to sRGB primaries"
+    ),
+    (
+        "Khronos PBR Neutral sRGB",
+        "Khronos PBR Neutral sRGB",
+        "Neutral PBR display-referred space aligned with Khronos material standards"
+    ),
+    (
+        "Linear CIE XYZ D65",
+        "Linear CIE-XYZ D65",
+        "Scene-linear CIE XYZ color space using D65 white point"
+    ),
+    (
+        "Linear CIE XYZ E",
+        "Linear CIE-XYZ E",
+        "Scene-linear CIE XYZ color space using equal-energy white point"
+    ),
+    (
+        "Linear DCI P3 D65",
+        "Linear DCI-P3 D65",
+        "Scene-linear DCI-P3 color space with D65 white point"
+    ),
+    (
+        "Linear FilmLight E Gamut",
+        "Linear FilmLight E-Gamut",
+        "Scene-linear FilmLight E-Gamut used in professional VFX pipelines"
+    ),
+    (
+        "Linear Rec.2020",
+        "Linear Rec.2020",
+        "Scene-linear Rec.2020 wide-gamut color space"
+    ),
+    (
+        "Linear Rec.709",
+        "Linear Rec.709",
+        "Scene-linear Rec.709 color space (legacy broadcast standard)"
+    ),
+    (
+        "Non-Color",
+        "Non-Color",
+        "Data-only space with no color transform (normals, roughness, masks)"
+    ),
+    (
+        "Rec.1886",
+        "Rec.1886",
+        "Display-referred Rec.1886 color space for legacy video systems"
+    ),
+    (
+        "Rec.2020",
+        "Rec.2020",
+        "Display-referred Rec.2020 color space for HDR and wide-gamut displays"
+    ),
+    (
+        "sRGB",
+        "sRGB",
+        "Standard display-referred sRGB color space"
+    ),
+]
+
 
 class SequencedBakeProperties(PropertyGroup):
     sequenced_bake_output_path: bpy.props.StringProperty(
@@ -50,17 +407,7 @@ class SequencedBakeProperties(PropertyGroup):
     sequenced_bake_image_format: bpy.props.EnumProperty(
         name="",
         description="Choose the image format",
-        items=[
-            ("PNG", "PNG", "Save as PNG"),
-            ("JPEG", "JPEG", "Save as JPEG"),
-            ("BMP", "BMP", "Save as BMP"),
-            ("TIFF", "TIFF", "Save as TIFF"),
-            ("TGA", "TGA", "Save as TGA"),
-            ("EXR", "OpenEXR", "Save as OpenEXR"),
-            ("HDR", "Radiance HDR", "Save as Radiance HDR"),
-            ("CINEON", "Cineon", "Save as Cineon"),
-            ("DPX", "DPX", "Save as DPX")
-        ],
+        items=IMAGE_FORMAT_ITEMS,
         default="PNG"
     )
     sequence_is_alpha: bpy.props.BoolProperty(
@@ -78,7 +425,7 @@ class SequencedBakeProperties(PropertyGroup):
         description="Clears the baked maps from blenders image viewer list",
         default=True
     )
-    sequenced_selected_to_active: bpy.props.BoolProperty( 
+    sequenced_selected_to_active: bpy.props.BoolProperty(
         name="Selected to Active",
         description='Enable to bake from the selected object into the active one',
         default=False
@@ -111,7 +458,7 @@ class SequencedBakeProperties(PropertyGroup):
         max=sys.float_info.max,
         unit='LENGTH'
     )
-    
+
     sequenced_bake_normal: bpy.props.BoolProperty(
         name="Normal",
         description='Enable to bake the normal map for the selected objects active material',
@@ -122,49 +469,25 @@ class SequencedBakeProperties(PropertyGroup):
     normal_map_space: bpy.props.EnumProperty(
         name="Space",
         description="Normal map coordinate space",
-        items=[
-            ('OBJECT', "Object", "Use object space for the normal map"),
-            ('TANGENT', "Tangent", "Use tangent space for the normal map")
-        ],
+        items=NORMAL_MAP_SPACE_ITEMS,
         default='TANGENT'
     )
     normal_map_red_channel: bpy.props.EnumProperty(
         name="R",
         description="Swizzle for the R channel",
-        items=[
-            ("POS_X", '+X', "Positive X axis"),
-            ("POS_Y", '+Y', "Positive Y axis"),
-            ("POS_Z", '+Z', "Positive Z axis"),
-            ("NEG_X", '-X', "Negative X axis"),
-            ("NEG_Y", '-Y', "Negative Y axis"),
-            ("NEG_Z", '-Z', "Negative Z axis"),
-        ],
+        items=NORMAL_MAP_SWIZZLE_ITEMS,
         default="POS_X"
     )
     normal_map_green_channel: bpy.props.EnumProperty(
         name="G",
         description="Swizzle for the G channel",
-        items=[
-            ("POS_X", '+X', "Positive X axis"),
-            ("POS_Y", '+Y', "Positive Y axis"),
-            ("POS_Z", '+Z', "Positive Z axis"),
-            ("NEG_X", '-X', "Negative X axis"),
-            ("NEG_Y", '-Y', "Negative Y axis"),
-            ("NEG_Z", '-Z', "Negative Z axis"),
-        ],
+        items=NORMAL_MAP_SWIZZLE_ITEMS,
         default="POS_Y"
     )
     normal_map_blue_channel: bpy.props.EnumProperty(
         name="B",
         description="Swizzle for the B channel",
-        items=[
-            ("POS_X", '+X', "Positive X axis"),
-            ("POS_Y", '+Y', "Positive Y axis"),
-            ("POS_Z", '+Z', "Positive Z axis"),
-            ("NEG_X", '-X', "Negative X axis"),
-            ("NEG_Y", '-Y', "Negative Y axis"),
-            ("NEG_Z", '-Z', "Negative Z axis"),
-        ],
+        items=NORMAL_MAP_SWIZZLE_ITEMS,
         default="POS_Z"
     )
     sequenced_bake_roughness: bpy.props.BoolProperty(
@@ -315,48 +638,22 @@ class SequencedBakeProperties(PropertyGroup):
     display_device: bpy.props.EnumProperty(
         name="Display Device",
         description="Select the display device",
-        items=[
-            ('sRGB', 'sRGB', ''),
-            ('Display P3', 'Display P3', ''),
-            ('Rec.1886', 'Rec.1886', ''),
-            ('Rec.2020', 'Rec.2020', '')
-        ],
-        default='sRGB'
+        items=DISPLAY_DEVICE_ITEMS,
+        default="sRGB"
     )
-    
     # View Transform
     view_transform: bpy.props.EnumProperty(
         name="View Transform",
         description="Select the view transform",
-        items=[
-            ('Standard', 'Standard', ''),
-            ('Khronos PBR Neutral', 'Khronos PBR Neutral', ''),
-            ('AgX', 'AgX', ''),
-            ('Filmic', 'Filmic', ''),
-            ('Filmic Log', 'Filmic Log', ''),
-            ('False Color', 'False Color', ''),
-            ('Raw', 'Raw', '')
-        ],
-        default='AgX'
+        items=VIEW_TRANSFORM_ITEMS,
+        default="Standard"
     )
-    
     # Look
     look: bpy.props.EnumProperty(
         name="Look",
         description="Select the look",
-        items=[
-            ('None', 'None', ''),
-            ('Punchy', 'Punchy', ''),
-            ('Greyscale', 'Greyscale', ''),
-            ('Very High Contrast', 'Very High Contrast', ''),
-            ('High Contrast', 'High Contrast', ''),
-            ('Medium High Contrast', 'Medium High Contrast', ''),
-            ('Base Contrast', 'Base Contrast', ''),
-            ('Medium Low Contrast', 'Medium Low Contrast', ''),
-            ('Low Contrast', 'Low Contrast', ''),
-            ('Very Low Contrast', 'Very Low Contrast', '')
-        ],
-        default='None'
+        items=LOOK_ITEMS,
+        default="None"
     )
     # Exposure
     exposure: bpy.props.FloatProperty(
@@ -366,7 +663,7 @@ class SequencedBakeProperties(PropertyGroup):
         min=-10.0,
         max=10.0
     )
-    
+
     # Gamma
     gamma: bpy.props.FloatProperty(
         name="Gamma",
@@ -375,99 +672,42 @@ class SequencedBakeProperties(PropertyGroup):
         min=0.0,
         max=5.0
     )
-    
+
     # Sequencer
     sequencer: bpy.props.EnumProperty(
         name="Sequencer",
         description="Select the sequencer color space",
-        items=[
-            ('ACES2065-1', 'ACES2065-1', ''),
-            ('ACEScg', 'ACEScg', ''),
-            ('AgX Base_Display_P3', 'AgX Base Display P3', ''),
-            ('AgX Base_Rec_1886', 'AgX Base Rec.1886', ''),
-            ('AgX Base_Rec_2020', 'AgX Base Rec.2020', ''),
-            ('AgX Base_sRGB', 'AgX Base sRGB', ''),
-            ('AgX Log', 'AgX Log', ''),
-            ('Display P3', 'Display P3', ''),
-            ('Filmic Log', 'Filmic Log', ''),
-            ('Filmic sRGB', 'Filmic sRGB', ''),
-            ('Khronos PBR Neutral sRGB', 'Khronos PBR Neutral sRGB', ''),
-            ('Linear CIE XYZ D65', 'Linear CIE-XYZ D65', ''),
-            ('Linear CIE XYZ E', 'Linear CIE-XYZ E', ''),
-            ('Linear DCI P3 D65', 'Linear DCI-P3 D65', ''),
-            ('Linear FilmLight E Gamut', 'Linear FilmLight E-Gamut', ''),
-            ('Linear Rec.2020', 'Linear Rec.2020', ''),
-            ('Linear Rec.709', 'Linear Rec.709', ''),
-            ('Non-Color', 'Non-Color', ''),
-            ('Rec.1886', 'Rec.1886', ''),
-            ('Rec.2020', 'Rec.2020', ''),
-            ('sRGB', 'sRGB', '')
-        ],
-        default='sRGB'
+        items=SEQUENCER_COLORSPACE_ITEMS,
+        default="sRGB"
     )
-    
+
     # Image texture settings.
     interpolation: bpy.props.EnumProperty(
         name="Interpolation",
         description="Set the texture interpolation method",
-        items=[
-            ('Linear', "Linear", "Use linear interpolation"),
-            ('Closest', "Closest", "Use nearest neighbor interpolation"),
-            ('Cubic', "Cubic", "Use cubic interpolation"),
-            ('Smart', "Smart", "Use smart interpolation"),
-        ],
+        items=INTERPOLATION_ITEMS,
         default='Linear'
     )
     projection: bpy.props.EnumProperty(
         name="Projection",
         description="Set the texture projection method",
-        items=[
-            ('Flat', "Flat", "Flat projection"),
-            ('Box', "Box", "Box projection"),
-            ('Square', "Square", "Square projection"),
-            ('Tube', "Tube", "Tube projection"),
-        ],
+        items=PROJECTION_ITEMS,
         default='Flat'
     )
     extension: bpy.props.EnumProperty(
         name="Extension",
         description="Set the texture extension method",
-        items=[
-            ('Repeat', "Repeat", "Repeat the texture"),
-            ('Extend', "Extend", "Extend the texture edges"),
-            ('Clip', "Clip", "Clip the texture to the image bounds"),
-            ('Mirror', "Mirror", "Mirror the texture"),
-        ],
+        items=EXTENSION_ITEMS,
         default='Repeat'
     )
+
     colorspace: bpy.props.EnumProperty(
-        name="Color Space",
-        description="Set the color space of the texture",
-        items=[
-            ('ACES2065-1', 'ACES2065-1', ''),
-            ('ACEScg', 'ACEScg', ''),
-            ('AgX Base_Display_P3', 'AgX Base Display P3', ''),
-            ('AgX Base_Rec_1886', 'AgX Base Rec.1886', ''),
-            ('AgX Base_Rec_2020', 'AgX Base Rec.2020', ''),
-            ('AgX Base_sRGB', 'AgX Base sRGB', ''),
-            ('AgX Log', 'AgX Log', ''),
-            ('Display P3', 'Display P3', ''),
-            ('Filmic Log', 'Filmic Log', ''),
-            ('Filmic sRGB', 'Filmic sRGB', ''),
-            ('Khronos PBR Neutral sRGB', 'Khronos PBR Neutral sRGB', ''),
-            ('Linear CIE XYZ D65', 'Linear CIE-XYZ D65', ''),
-            ('Linear CIE XYZ E', 'Linear CIE-XYZ E', ''),
-            ('Linear DCI P3 D65', 'Linear DCI-P3 D65', ''),
-            ('Linear FilmLight E Gamut', 'Linear FilmLight E-Gamut', ''),
-            ('Linear Rec.2020', 'Linear Rec.2020', ''),
-            ('Linear Rec.709', 'Linear Rec.709', ''),
-            ('Non-Color', 'Non-Color', ''),
-            ('Rec.1886', 'Rec.1886', ''),
-            ('Rec.2020', 'Rec.2020', ''),
-            ('sRGB', 'sRGB', '')
-        ],
-        default='sRGB'
+        name="Colorspace",
+        description="Select the color space",
+        items=COLOR_SPACE_ITEMS,
+        default="sRGB"
     )
+
 
 class SequencedBakeSocket(NodeSocket):
     bl_idname = "SequencedBakeSocket"
@@ -493,7 +733,14 @@ class SequencedBakePanel(Panel):
 
         layout = self.layout
         scene = context.scene
+
+        # SAFETY GUARD: exit if property not registered yet
+        if not hasattr(scene, "sequenced_bake_props"):
+            self.layout.label(text="Sequenced Bake not initialized")
+            return
+
         sequenced_bake_props = scene.sequenced_bake_props
+        # ensure_defaults(sequenced_bake_props)  # <-- safely sets sRGB etc.
         option_padding = 2.0
 
         # Output Path
@@ -524,7 +771,7 @@ class SequencedBakePanel(Panel):
         col.separator(factor=3.0, type='LINE')
 
         col.label(text="Selected to Active:")
-        col.prop(sequenced_bake_props, "sequenced_selected_to_active")         
+        col.prop(sequenced_bake_props, "sequenced_selected_to_active")
 
         # Expand additional options if selected to active is selected
         if sequenced_bake_props.sequenced_selected_to_active:
@@ -539,11 +786,11 @@ class SequencedBakePanel(Panel):
                 row = col.row()
                 row.separator(factor=option_padding)
                 row.prop(sequenced_bake_props, "selected_to_active_cage_object")
-                
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequenced_bake_props, "selected_to_active_extrusion")
-                        
+
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(sequenced_bake_props, "selected_to_active_max_ray_distance")
@@ -690,6 +937,7 @@ class SequencedBakePanel(Panel):
         # Baking Button
         col.operator("sequenced_bake.bake", text="Bake Material Sequence")
 
+
 class SequencedBakeNode(Node):
     bl_idname = "ShaderNodeSequencedBake"
     bl_label = "Sequenced Bake"
@@ -702,8 +950,16 @@ class SequencedBakeNode(Node):
         # self.outputs.new("NodeSocketShader", "Output")
 
     def draw_buttons(self, context, layout):
+
         scene = context.scene
+
+        # SAFETY GUARD: exit if property not registered yet
+        if not hasattr(scene, "sequenced_bake_props"):
+            self.layout.label(text="Sequenced Bake not initialized")
+            return
+
         sequenced_bake_props = scene.sequenced_bake_props
+        # ensure_defaults(sequenced_bake_props)  # <-- safely sets sRGB etc.
         option_padding = 2.0
 
         # Output Path
@@ -918,7 +1174,7 @@ class SequencedBakeOperator(Operator):
     def execute(self, context):
 
         if bpy.context.scene.render.engine == 'CYCLES':
-            
+
             self._props = bpy.context.scene.sequenced_bake_props
 
             # Define the root directory.
@@ -999,21 +1255,31 @@ class SequencedBakeOperator(Operator):
                     # Set the frame and update the scene
                     bpy.context.scene.frame_set(frame)
                     bpy.context.view_layer.update()
-                    
+
                     # Format the name of the generated texture.
                     bake_type_name = self.object_name + "_" + self.material_name + "_" + bake_type
 
                     # Create a new texture for the Image Texture node
                     texture = bpy.data.images.new(
-                        name=bake_type_name, 
+                        name=bake_type_name,
                         width=self._props.sequenced_bake_width,
                         height=self._props.sequenced_bake_height,
                         alpha=self._props.sequence_is_alpha,
-                        float_buffer=self._props.sequence_use_float #  "float_buffer controls the internal precision of the image during creation and baking."
+                        float_buffer=self._props.sequence_use_float
+                        # "float_buffer controls the internal precision of the image during creation and baking."
                     )
 
                     # Texture color space.
-                    texture.colorspace_settings.name = self._props.colorspace
+                    valid_cs = {
+                        e.identifier
+                        for e in bpy.types.ColorManagedInputColorspaceSettings
+                        .bl_rna.properties["name"].enum_items
+                    }
+
+                    if self._props.colorspace in valid_cs:
+                        texture.colorspace_settings.name = self._props.colorspace
+                    else:
+                        texture.colorspace_settings.name = 'sRGB'
 
                     # Create a new Image Texture node
                     image_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
@@ -1044,7 +1310,7 @@ class SequencedBakeOperator(Operator):
 
                     # Select the new Image Texture node making it the active selection.
                     mat.node_tree.nodes.active = image_node
-                    
+
                     # Update the UI.
                     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
@@ -1093,16 +1359,28 @@ class SequencedBakeOperator(Operator):
 
                     # Color Management options.                    
                     # Apply Display Device
-                    bpy.context.scene.display_settings.display_device = self._props.display_device
+                    display = bpy.context.scene.display_settings
+
+                    valid_devices = {
+                        e.identifier
+                        for e in bpy.types.ColorManagedDisplaySettings
+                        .bl_rna.properties["display_device"].enum_items
+                    }
+
+                    if self._props.display_device in valid_devices:
+                        display.display_device = self._props.display_device
+                    else:
+                        display.display_device = 'sRGB'
 
                     # Apply View Transform and Look
-                    bpy.context.scene.view_settings.view_transform = self._props.view_transform
+                    view = bpy.context.scene.view_settings
+                    view.view_transform = self._props.view_transform
+                    valid_looks = {e.isidentifier for e in view.look}
 
-                    agx_prefix = ''
-                    if self._props.view_transform == 'AgX' and self._props.look != 'None':
-                        agx_prefix = 'AgX - '
-
-                    bpy.context.scene.view_settings.look = agx_prefix + self._props.look
+                    if self._props.look in valid_looks:
+                        view.look = self._props.look
+                    else:
+                        view.look = 'None'
 
                     # Apply Exposure and Gamma
                     bpy.context.scene.view_settings.exposure = self._props.exposure
@@ -1112,7 +1390,8 @@ class SequencedBakeOperator(Operator):
                     try:
                         bpy.context.scene.sequencer_colorspace_settings.name = self._props.sequencer
                     except Exception as e:
-                        self.report({'WARNING'}, f"Sequencer color space '{self._props.sequencer}' not applied: {str(e)}")
+                        self.report({'WARNING'},
+                                    f"Sequencer color space '{self._props.sequencer}' not applied: {str(e)}")
 
                     # Bake the texture
                     try:
@@ -1120,7 +1399,7 @@ class SequencedBakeOperator(Operator):
                         if self._props.selected_to_active_cage:
                             if self._props.selected_to_active_cage_object is not None:
                                 cage_object_name = self._props.selected_to_active_cage_object.name
-                            
+
                         if bake_type == "METALLIC":
                             bpy.ops.object.bake(type="EMIT",
                                                 use_selected_to_active=self._props.sequenced_selected_to_active,
@@ -1143,8 +1422,9 @@ class SequencedBakeOperator(Operator):
                     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
                     # Define the output path
-                    image_path = os.path.join(root_directory, bake_type_name, str(frame) + f".{self._props.sequenced_bake_image_format}")
-                    
+                    image_path = os.path.join(root_directory, bake_type_name,
+                                              str(frame) + f".{self._props.sequenced_bake_image_format}")
+
                     # NOTE: Setting this doesn't seem to make a difference for the saved image.
                     # "color_depth controls the precision of the saved file during export."
                     if not self._props.sequence_use_float:
@@ -1195,7 +1475,7 @@ class SequencedBakeOperator(Operator):
                             # Connect it to the Surface input of the Material Output node
                             surface_input = material_output.inputs['Surface']
                             links.new(connected_output_socket, surface_input)
-                            
+
                             # TODO: Add GLTF Method here.
 
                         else:

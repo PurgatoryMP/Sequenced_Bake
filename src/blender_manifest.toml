@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 id = "sequenced_bake"
 name = "Sequenced Bake"
-version = "1.0.16"
+version = "1.0.18"
 tagline = "Tools for baking material sequences and generating sprite sheets"
 maintainer = "Anthony O'Connell"
 type = "add-on"

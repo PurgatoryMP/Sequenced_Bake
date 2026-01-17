@@ -16,7 +16,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 0, 16),
+    "version": (1, 0, 18),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -87,50 +87,65 @@ def draw_custom_node_menu(self, context):
     layout.operator("node.add_node", text="Sequenced Bake").type = "ShaderNodeSequencedBake"
     layout.operator("node.add_node", text="Sprite Sheet Creator").type = "ShaderNodeSpriteSheetCreatorNode"
 
+
+classes = (
+    SequencedBakeAddonProperties,
+
+    # Sequence Bake
+    SequencedBakeProperties,
+    SequencedBakeSocket,
+    SequencedBakeNode,
+    SequencedBakeOperator,
+    SequencedBakePanel,
+
+    # Sprite Sheet
+    SpriteSheetProperties,
+    SpriteSheetCreatorSocket,
+    SpriteSheetCreatorNode,
+    OBJECT_OT_CreateSpriteSheet,
+    SpriteSheetCreatorPanel,
+    SpriteSheetCreatorVSEPanel,
+)
+
+
 def register():
-    bpy.utils.register_class(SequencedBakeAddonProperties)
-    
-    # Register Sequence Bake components
-    bpy.utils.register_class(SequencedBakePanel)
-    bpy.utils.register_class(SequencedBakeOperator)
-    bpy.utils.register_class(SequencedBakeProperties)
-    bpy.utils.register_class(SequencedBakeSocket)
-    bpy.utils.register_class(SequencedBakeNode)
-    bpy.types.Scene.sequenced_bake_props = bpy.props.PointerProperty(type=SequencedBakeProperties)
-    bpy.types.ShaderNode.sequenced_bake_props = bpy.props.PointerProperty(type=SequencedBakeProperties)
-    
-    # Register Sprite Sheet components
-    bpy.utils.register_class(SpriteSheetCreatorVSEPanel)
-    bpy.utils.register_class(SpriteSheetCreatorNode)
-    bpy.utils.register_class(SpriteSheetCreatorSocket)
-    bpy.utils.register_class(SpriteSheetCreatorPanel)
-    bpy.utils.register_class(SpriteSheetProperties)
-    bpy.types.Scene.sprite_sheet_props = bpy.props.PointerProperty(type=SpriteSheetProperties)
-    bpy.utils.register_class(OBJECT_OT_CreateSpriteSheet)
-    
+    # Register all classes FIRST
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+    # THEN create pointer properties
+    bpy.types.Scene.sequenced_bake_props = bpy.props.PointerProperty(
+        type=SequencedBakeProperties,
+        name="Sequenced Bake Props",
+    )
+
+    bpy.types.Scene.sprite_sheet_props = bpy.props.PointerProperty(
+        type=SpriteSheetProperties,
+        name="Sprite Sheet Props",
+    )
+
+    bpy.types.ShaderNode.sequenced_bake_props = bpy.props.PointerProperty(
+        type=SequencedBakeProperties,
+        name="Sequenced Bake Node Props",
+    )
+
     add_custom_node_category()
+
 
 def unregister():
     remove_custom_node_category()
 
-    bpy.utils.unregister_class(SequencedBakeAddonProperties)
-    
-    # Unregister Sequence Bake components
-    bpy.utils.unregister_class(SequencedBakePanel)
-    bpy.utils.unregister_class(SequencedBakeOperator)
-    bpy.utils.unregister_class(SequencedBakeProperties)
-    bpy.utils.unregister_class(SequencedBakeSocket)
-    bpy.utils.unregister_class(SequencedBakeNode)
-    del bpy.types.Scene.sequenced_bake_props
-    
-    # Unregister Sprite Sheet components
-    bpy.utils.unregister_class(SpriteSheetCreatorVSEPanel)
-    bpy.utils.unregister_class(SpriteSheetCreatorNode)
-    bpy.utils.unregister_class(SpriteSheetCreatorSocket)
-    bpy.utils.unregister_class(SpriteSheetCreatorPanel)
-    bpy.utils.unregister_class(SpriteSheetProperties)
-    bpy.utils.unregister_class(OBJECT_OT_CreateSpriteSheet)
-    del bpy.types.Scene.sprite_sheet_props
+    if hasattr(bpy.types.Scene, "sprite_sheet_props"):
+        del bpy.types.Scene.sprite_sheet_props
+
+    if hasattr(bpy.types.Scene, "sequenced_bake_props"):
+        del bpy.types.Scene.sequenced_bake_props
+
+    if hasattr(bpy.types.ShaderNode, "sequenced_bake_props"):
+        del bpy.types.ShaderNode.sequenced_bake_props
+
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
 
 
 if __name__ == "__main__":
