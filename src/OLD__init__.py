@@ -16,7 +16,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 0, 19),
+    "version": (1, 0, 18),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -33,8 +33,8 @@ from .sequenced_bake import (
 )
 from .sprite_sheet_creator import (
     SpriteSheetCreatorPanel,
-    # SpriteSheetCreatorNode,
-    # SpriteSheetCreatorSocket,
+    SpriteSheetCreatorNode,
+    SpriteSheetCreatorSocket,
     SpriteSheetCreatorVSEPanel,
     SpriteSheetProperties,
     OBJECT_OT_CreateSpriteSheet,
@@ -100,8 +100,8 @@ classes = (
 
     # Sprite Sheet
     SpriteSheetProperties,
-    # SpriteSheetCreatorSocket,
-    # SpriteSheetCreatorNode,
+    SpriteSheetCreatorSocket,
+    SpriteSheetCreatorNode,
     OBJECT_OT_CreateSpriteSheet,
     SpriteSheetCreatorPanel,
     SpriteSheetCreatorVSEPanel,
