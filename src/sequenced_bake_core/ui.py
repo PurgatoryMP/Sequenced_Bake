@@ -53,17 +53,16 @@ class SequencedBakeSocket(NodeSocket):
 # -----------------------------
 def draw_sequenced_bake_ui(layout, props):
     """
-    Draws the full Sequenced Bake UI for panels or nodes.
+    Draws the full Sequenced Bake UI for panels or nodes using boxed sections.
 
-    This function renders the user interface for configuring
-    Sequenced Bake settings, including:
-    - Output path
-    - Image size and format
-    - Selected-to-active options
-    - Image texture settings
-    - Bake type toggles and lighting contributions
-    - Color management options
-    - Bake operator button
+    Sections:
+    - Material Output
+    - Image Size & Format
+    - Selected to Active
+    - Image Texture Settings
+    - Bake Type Options
+    - Color Management
+    - Bake Operator Button
 
     Args:
         layout (bpy.types.UILayout): Blender UI layout object.
@@ -72,32 +71,36 @@ def draw_sequenced_bake_ui(layout, props):
     """
     option_padding = 2.0
 
-    # Output Path
+    # -----------------------------
+    # Material Output
+    # -----------------------------
     box = layout.box()
     col = box.column(align=True)
     col.label(text="Material Output Path:")
     col.prop(props, "sequenced_bake_output_path")
 
-    col.separator(factor=3.0, type='LINE')
-
-    # Image Size
+    # -----------------------------
+    # Image Size & Format
+    # -----------------------------
+    box = layout.box()
+    col = box.column(align=True)
     col.label(text="Generated Image Size:")
     row = col.row(align=True)
     row.prop(props, "sequenced_bake_width")
     row.prop(props, "sequenced_bake_height")
 
-    col.separator()
     col.label(text="Baked Image Format:")
     col.prop(props, "sequenced_bake_image_format")
 
-    col.separator()
     col.prop(props, "sequence_is_alpha")
     col.prop(props, "sequence_use_float")
     col.prop(props, "sequence_clear_baked_maps")
 
-    col.separator(factor=3.0, type='LINE')
-
+    # -----------------------------
     # Selected to Active
+    # -----------------------------
+    box = layout.box()
+    col = box.column(align=True)
     col.label(text="Selected to Active:")
     col.prop(props, "sequenced_selected_to_active")
     if props.sequenced_selected_to_active:
@@ -116,19 +119,24 @@ def draw_sequenced_bake_ui(layout, props):
         row.separator(factor=option_padding)
         row.prop(props, "selected_to_active_max_ray_distance")
 
-    col.separator(factor=3.0, type='LINE')
-
+    # -----------------------------
     # Image Texture Settings
+    # -----------------------------
+    box = layout.box()
+    col = box.column(align=True)
     col.label(text="Image Texture Settings:")
     col.prop(props, "interpolation")
     col.prop(props, "projection")
     col.prop(props, "extension")
     col.prop(props, "colorspace")
 
-    col.separator(factor=3.0, type='LINE')
-
+    # -----------------------------
     # Bake Type Options
+    # -----------------------------
+    box = layout.box()
+    col = box.column(align=True)
     col.label(text="Bake Type Options:")
+
     col.prop(props, "sequenced_bake_normal")
     if props.sequenced_bake_normal:
         col.label(text="Normal Map Options:")
@@ -180,15 +188,22 @@ def draw_sequenced_bake_ui(layout, props):
 
     col.prop(props, "sequenced_bake_metallic")
 
-    col.separator(factor=3.0, type='LINE')
-
+    # -----------------------------
     # Color Management
+    # -----------------------------
+    box = layout.box()
+    col = box.column(align=True)
     col.label(text="Color Management:")
     for attr in ["display_device", "view_transform", "look", "exposure", "gamma", "sequencer"]:
         col.prop(props, attr)
 
-    col.separator(factor=3.0, type='LINE')
+    # -----------------------------
+    # Bake Operator
+    # -----------------------------
+    box = layout.box()
+    col = box.column(align=True)
     col.operator("sequenced_bake.bake", text="Bake Material Sequence")
+
 
 
 # -----------------------------

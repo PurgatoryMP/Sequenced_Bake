@@ -52,84 +52,91 @@ class SpriteSheetCreatorNode(Node):
     # ------------------------------------------------------------------
 
     def _draw_sprite_sheet_ui(self, context, layout):
+        """
+        Draws the full Sprite Sheet Creator UI using boxed sections.
+
+        Sections:
+        - Source
+        - Layout (sprite sheet properties)
+        - Output
+        - Options
+        - Execute (button)
+
+        Args:
+            context (bpy.types.Context): Blender context.
+            layout (bpy.types.UILayout): UI layout to draw into.
+        """
         scene = context.scene
         props = scene.sprite_sheet_props
 
+        # -----------------------------
+        # Source Section
+        # -----------------------------
         box = layout.box()
         col = box.column(align=True)
-
-        # -------------------- Source --------------------
-
         col.label(text="Source:")
         col.prop(props, "source_type")
 
         if props.source_type == 'DIRECTORY':
-            col.separator()
             col.label(text="Image Sequence Directory:")
             col.prop(props, "directory")
 
         if props.source_type == 'VSE':
-            col.separator()
             col.prop(props, "use_all_vse_channels")
             if not props.use_all_vse_channels:
                 col.prop(props, "vse_channel")
 
-        col.separator(factor=3.0, type='LINE')
-
-        # -------------------- Layout --------------------
-
+        # -----------------------------
+        # Layout Section
+        # -----------------------------
+        box = layout.box()
+        col = box.column(align=True)
         col.label(text="Sprite Sheet Properties:")
         col.prop(props, "columns")
         col.prop(props, "rows")
-
-        col.separator()
         col.prop(props, "image_width")
         col.prop(props, "image_height")
-
-        col.separator()
         col.prop(props, "start_frame")
         col.prop(props, "end_frame")
-
-        col.separator()
         col.prop(props, "is_reversed")
 
-        col.separator(factor=3.0, type='LINE')
-
-        # -------------------- Output --------------------
-
+        # -----------------------------
+        # Output Section
+        # -----------------------------
+        box = layout.box()
+        col = box.column(align=True)
         col.label(text="Output File Name:")
         row = col.row(align=True)
         row.prop(props, "file_name")
         row.prop(props, "sprite_sheet_image_format")
-
-        col.separator()
 
         if props.source_type == 'VSE':
             col.label(text="VSE Output Directory:")
             col.prop(props, "vse_output_path")
 
         if props.source_type == 'COMPOSITOR':
-            col.separator()
             col.label(text="Compositor Output Directory:")
             col.prop(props, "compositor_output_path")
 
-        col.separator()
         col.prop(props, "file_overwrite")
 
-        col.separator(factor=3.0, type='LINE')
-
-        # -------------------- Options --------------------
-
+        # -----------------------------
+        # Options Section
+        # -----------------------------
+        box = layout.box()
+        col = box.column(align=True)
         col.prop(props, "sprite_sheet_is_alpha")
         col.prop(props, "open_images")
         col.prop(props, "open_output_directory")
         col.prop(props, "clear_generated_images")
 
-        col.separator(factor=3.0, type='LINE')
-
-        # -------------------- Execute --------------------
-
+        # -----------------------------
+        # Execute Section
+        # -----------------------------
+        box = layout.box()
+        col = box.column(align=True)
         col.operator("object.create_sprite_sheet", text="Generate Sprite Sheet")
+
 
 
 # ------------------------------------------------------------------------
