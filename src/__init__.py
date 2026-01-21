@@ -16,7 +16,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 0, 19),
+    "version": (1, 0, 20),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -24,7 +24,7 @@ bl_info = {
 }
 
 import bpy
-from .sequenced_bake import (
+from .sequenced_bake_core import (
     SequencedBakeProperties,
     SequencedBakePanel,
     SequencedBakeNode,
@@ -77,7 +77,8 @@ class SequencedBakeAddonProperties(AddonPreferences):
         
 
 def add_custom_node_category():
-    bpy.types.NODE_MT_add.append(draw_custom_node_menu)
+    if draw_custom_node_menu not in bpy.types.NODE_MT_add._dyn_ui_initialize():
+        bpy.types.NODE_MT_add.append(draw_custom_node_menu)
 
 def remove_custom_node_category():
     bpy.types.NODE_MT_add.remove(draw_custom_node_menu)
@@ -89,16 +90,17 @@ def draw_custom_node_menu(self, context):
 
 
 classes = (
+    # --- Preferences ---
     SequencedBakeAddonProperties,
 
-    # Sequence Bake
+    # --- Sequenced Bake ---
     SequencedBakeProperties,
     SequencedBakeSocket,
     SequencedBakeNode,
     SequencedBakeOperator,
     SequencedBakePanel,
 
-    # Sprite Sheet
+    # --- Sprite Sheet ---
     SpriteSheetProperties,
     # SpriteSheetCreatorSocket,
     # SpriteSheetCreatorNode,
