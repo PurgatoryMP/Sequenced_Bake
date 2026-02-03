@@ -707,3 +707,19 @@ class SequencedBakeProperties(PropertyGroup):
         items=COLOR_SPACE_ITEMS,
         default="sRGB"
     )
+    
+    show_material_manager: bpy.props.BoolProperty(
+        name="Show Material Manager",
+        description="Show material management UI in the add-on",
+        default=True
+    )
+    
+    bake_mode: bpy.props.EnumProperty(
+        name="Bake Mode",
+        description="Bake only selected material or all materials",
+        items=[
+            ('SELECTED', "Bake Selected", "Bake only the active material"),
+            ('ALL', "Bake All", "Bake all materials in the object")
+        ],
+        default='SELECTED',
+    )

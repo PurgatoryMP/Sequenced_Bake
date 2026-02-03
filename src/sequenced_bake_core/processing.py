@@ -17,7 +17,19 @@ import os
 
 
 def clear_generated_textures(props):
-    """Remove unused images after baking completes."""
+    """
+    Remove unused image datablocks generated during baking.
+
+    This function iterates through all images in the Blender file and removes
+    any image with zero users, effectively cleaning up temporary textures
+    created during the bake process. Cleanup is conditional based on the
+    user's add-on preferences.
+
+    Args:
+        props: Property group containing Sequenced Bake settings. The
+            `sequence_clear_baked_maps` flag determines whether cleanup
+            is performed.
+    """
     if not props.sequence_clear_baked_maps:
         return
 
@@ -27,6 +39,22 @@ def clear_generated_textures(props):
 
 
 def connect_metallic_node(material):
+    """
+    Temporarily reroute the Metallic input for baking.
+
+    For Metallic baking, Blender requires the Metallic signal to be connected
+    directly to the Material Output surface socket. This function detects an
+    existing Metallic input connection on the Principled BSDF and redirects
+    it to the Material Output node.
+
+    Args:
+        material (bpy.types.Material): The material whose node tree will be
+            modified for Metallic baking.
+
+    Raises:
+        RuntimeError: If the Principled BSDF or Material Output node cannot
+            be found in the material's node tree.
+    """
     nodes = material.node_tree.nodes
     links = material.node_tree.links
 
@@ -42,6 +70,21 @@ def connect_metallic_node(material):
 
 
 def reconnect_node(material):
+    """
+    Restore the original material node connections after baking.
+
+    This function removes any temporary links connected to the Material Output
+    surface socket and reconnects the Principled BSDF output, restoring the
+    material to its original shading configuration.
+
+    Args:
+        material (bpy.types.Material): The material whose node tree should
+            be restored.
+
+    Raises:
+        RuntimeError: If the Principled BSDF or Material Output node cannot
+            be found in the material's node tree.
+    """
     nodes = material.node_tree.nodes
     links = material.node_tree.links
 
@@ -57,25 +100,32 @@ def reconnect_node(material):
     links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
 
 
-def create_image_texture(
-    material,
-    name,
-    width,
-    height,
-    alpha,
-    float_buffer,
-    interpolation,
-    projection,
-    extension,
-    colorspace,
-):
-    image = bpy.data.images.new(
-        name=name,
-        width=width,
-        height=height,
-        alpha=alpha,
-        float_buffer=float_buffer,
-    )
+def create_image_texture(material, name, width, height, alpha, float_buffer, interpolation, projection, extension, colorspace):
+    """
+    Create and assign a new image texture node for baking.
+
+    This function creates a new image datablock and assigns it to an
+    Image Texture node within the given material. The node is set as
+    active to ensure Blender bakes into it.
+
+    Args:
+        material (bpy.types.Material): Material to which the image texture
+            node will be added.
+        name (str): Name of the new image datablock.
+        width (int): Width of the image in pixels.
+        height (int): Height of the image in pixels.
+        alpha (bool): Whether the image includes an alpha channel.
+        float_buffer (bool): Whether to use a floating-point color buffer.
+        interpolation (str): Texture interpolation mode.
+        projection (str): Texture projection mode.
+        extension (str): Texture extension mode.
+        colorspace (str): Color space name for the image.
+
+    Returns:
+        tuple[bpy.types.Node, bpy.types.Image]:
+            The created Image Texture node and its associated image datablock.
+    """
+    image = bpy.data.images.new(name=name, width=width, height=height, alpha=alpha, float_buffer=float_buffer)
 
     image.colorspace_settings.name = colorspace
 
@@ -98,16 +148,25 @@ def create_image_texture(
     return node, image
 
 
-def bake_frame(
-    bake_type,
-    props,
-    frame,
-    obj,
-    mat,
-    image_node,
-    image,
-    output_dir,
-):
+def bake_frame(bake_type, props, frame, obj, mat, image_node, image, output_dir):
+    """
+    Bake a single frame for a specific bake pass and material.
+
+    This function configures bake settings based on the bake type,
+    updates the scene to the requested frame, performs the bake
+    operation, and saves the resulting image to disk.
+
+    Args:
+        bake_type (str): The bake pass type (e.g. NORMAL, DIFFUSE, METALLIC).
+        props: Property group containing Sequenced Bake settings.
+        frame (int): Frame number to bake.
+        obj (bpy.types.Object): Object being baked.
+        mat (bpy.types.Material): Material being baked.
+        image_node (bpy.types.Node): Active Image Texture node used for baking.
+        image (bpy.types.Image): Image datablock receiving the baked result.
+        output_dir (str): Directory where the baked image will be saved.
+    """
+        
     scene = bpy.context.scene
     scene.frame_set(frame)
     bpy.context.view_layer.update()

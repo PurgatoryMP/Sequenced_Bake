@@ -1,12 +1,100 @@
+# This file is part of Sequence Bake.
+#
+# Sequence Bake is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any later version.
+#
+# Sequence Bake is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+
 import bpy
 from bpy.types import Panel, Node, NodeSocket
-
-# Import the property group
 from .properties import SequencedBakeProperties
 
-# -----------------------------
-# Node Socket
-# -----------------------------
+def draw_material_manager_ui(layout, context):
+    """
+    Custom Material Manager UI.
+
+    - Uses Blender material slots (MATERIAL_UL_matslots)
+    - Removes redundant active_material selector
+    - Empty slot → Add New Material button
+    - Filled slot → Editable material name
+    - Fake User toggle
+    - Link data control
+    - Bake actions dropdown
+    """
+    obj = context.object
+
+    box = layout.box()
+    col = box.column(align=True)
+    col.label(text="Materials")
+
+    if not obj or obj.type not in {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT'}:
+        col.label(text="No compatible object selected")
+        return
+
+    # Material Slots List
+    row = col.row()
+
+    row.template_list(
+        "MATERIAL_UL_matslots",
+        "",
+        obj,
+        "material_slots",
+        obj,
+        "active_material_index",
+        rows=4,
+    )
+
+    slot_ops = row.column(align=True)
+    slot_ops.operator("object.material_slot_add", icon='ADD', text="")
+    slot_ops.operator("object.material_slot_remove", icon='REMOVE', text="")
+    slot_ops.separator()
+    slot_ops.menu(
+        "OBJECT_MT_material_slot_specials",
+        icon='DOWNARROW_HLT',
+        text=""
+    )
+
+    # Slot Material Controls
+    slot = (
+        obj.material_slots[obj.active_material_index]
+        if obj.material_slots and obj.active_material_index >= 0
+        else None
+    )
+
+    mat = slot.material if slot else None
+
+    row = col.row(align=True)
+
+    if mat is None:
+        # Empty slot → create new material
+        row.operator(
+            "material.new",
+            text="Add New Material",
+            icon='ADD'
+        )
+    else:
+        # Existing material → editable name
+        row.prop(mat, "name", text="")
+
+        # Fake user toggle
+        row.prop(
+            mat,
+            "use_fake_user",
+            text="",
+            icon='FAKE_USER_ON' if mat.use_fake_user else 'FAKE_USER_OFF'
+        )
+
+    # Link data control (always available)
+    row.prop(obj, "active_material", text="", icon='LINKED')
+
+
 class SequencedBakeSocket(NodeSocket):
     """
     Custom NodeSocket for Sequenced Bake nodes.
@@ -48,9 +136,6 @@ class SequencedBakeSocket(NodeSocket):
         return (0.8, 0.8, 0.2, 1.0)  # Yellow
 
 
-# -----------------------------
-# Helper: Draw UI
-# -----------------------------
 def draw_sequenced_bake_ui(layout, props):
     """
     Draws the full Sequenced Bake UI for panels or nodes using boxed sections.
@@ -70,18 +155,13 @@ def draw_sequenced_bake_ui(layout, props):
             all Sequenced Bake settings.
     """
     option_padding = 2.0
+    
+    # Material Manager
+    if hasattr(props, "show_material_manager") and props.show_material_manager:
+        draw_material_manager_ui(layout, bpy.context)
 
-    # -----------------------------
-    # Material Output
-    # -----------------------------
-    box = layout.box()
-    col = box.column(align=True)
-    col.label(text="Material Output Path:")
-    col.prop(props, "sequenced_bake_output_path")
 
-    # -----------------------------
     # Image Size & Format
-    # -----------------------------
     box = layout.box()
     col = box.column(align=True)
     col.label(text="Generated Image Size:")
@@ -96,9 +176,7 @@ def draw_sequenced_bake_ui(layout, props):
     col.prop(props, "sequence_use_float")
     col.prop(props, "sequence_clear_baked_maps")
 
-    # -----------------------------
     # Selected to Active
-    # -----------------------------
     box = layout.box()
     col = box.column(align=True)
     col.label(text="Selected to Active:")
@@ -119,9 +197,8 @@ def draw_sequenced_bake_ui(layout, props):
         row.separator(factor=option_padding)
         row.prop(props, "selected_to_active_max_ray_distance")
 
-    # -----------------------------
+
     # Image Texture Settings
-    # -----------------------------
     box = layout.box()
     col = box.column(align=True)
     col.label(text="Image Texture Settings:")
@@ -130,9 +207,7 @@ def draw_sequenced_bake_ui(layout, props):
     col.prop(props, "extension")
     col.prop(props, "colorspace")
 
-    # -----------------------------
     # Bake Type Options
-    # -----------------------------
     box = layout.box()
     col = box.column(align=True)
     col.label(text="Bake Type Options:")
@@ -188,27 +263,28 @@ def draw_sequenced_bake_ui(layout, props):
 
     col.prop(props, "sequenced_bake_metallic")
 
-    # -----------------------------
     # Color Management
-    # -----------------------------
     box = layout.box()
     col = box.column(align=True)
     col.label(text="Color Management:")
     for attr in ["display_device", "view_transform", "look", "exposure", "gamma", "sequencer"]:
         col.prop(props, attr)
-
-    # -----------------------------
-    # Bake Operator
-    # -----------------------------
+    
+    # Material Output
     box = layout.box()
     col = box.column(align=True)
+    col.label(text="Material Output Path:")
+    col.prop(props, "sequenced_bake_output_path")
+    
+    # Bake Operator
+    box = layout.box()
+    col = box.column(align=True)
+    col.prop(props, "bake_mode")
+    row.separator(factor=option_padding)
     col.operator("sequenced_bake.bake", text="Bake Material Sequence")
 
 
 
-# -----------------------------
-# Panel
-# -----------------------------
 class SequencedBakePanel(Panel):
     """
     UI Panel for the Sequenced Bake add-on.
@@ -240,9 +316,6 @@ class SequencedBakePanel(Panel):
         draw_sequenced_bake_ui(self.layout, scene.sequenced_bake_props)
 
 
-# -----------------------------
-# Node
-# -----------------------------
 class SequencedBakeNode(Node):
     """
     Custom Shader Node for Sequenced Bake.
