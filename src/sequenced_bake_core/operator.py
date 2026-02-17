@@ -171,5 +171,5 @@ class SequencedBakeOperator(bpy.types.Operator):
         clear_generated_textures(props)
         
         # Report successful completion to the user
-        elf.report({'INFO'}, f"Sequenced Bake completed for {len(mats_to_bake)} material(s)")
+        self.report({'INFO'}, f"Sequenced Bake completed for {len(mats_to_bake)} material(s)")
         return {'FINISHED'}
