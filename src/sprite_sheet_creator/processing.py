@@ -35,7 +35,7 @@ def _report(report_fn, level, message):
 
 def load_directory_images(directory, start_frame=None, end_frame=None, reversed_order=False, report_fn=None):
     """
-    Load images from a directory where filenames are numeric (e.g. 0001.png),
+    Load images from a directory and sort them according to selected sorting mode.
     optionally slicing according to start_frame and end_frame.
 
     Args:
@@ -61,30 +61,36 @@ def load_directory_images(directory, start_frame=None, end_frame=None, reversed_
             _report(report_fn, {'ERROR'}, f"Failed to list directory contents: {directory}\nError: {e}")
             return images
 
-        # Filter numeric filenames
-        image_files = []
-        for f in files:
-            name, ext = os.path.splitext(f)
-            if not ext:
-                continue
-            try:
-                int(name)
-                image_files.append(f)
-            except ValueError:
-                continue
+        # Filter valid image files (any filename with extension)
+        image_files = [
+            f for f in files
+            if os.path.splitext(f)[1]
+        ]
 
         if not image_files:
-            _report(report_fn, {'WARNING'}, f"No numeric image files found in directory: {directory}")
+            _report(report_fn, {'WARNING'}, f"No image files found in directory: {directory}")
             return images
 
-        # Sort files numerically
+        # Alphabetical sorting.
         try:
-            image_files.sort(
-                key=lambda f: int(os.path.splitext(f)[0]),
-                reverse=reversed_order
-            )
+            if hasattr(bpy.context.scene, "sprite_sheet_props"):
+                props = bpy.context.scene.sprite_sheet_props
+
+                if props.use_alphabetical_sort:
+                    if props.alphabetical_case_sensitive:
+                        image_files.sort(reverse=props.alphabetical_reverse)
+                    else:
+                        image_files.sort(
+                            key=lambda f: f.lower(),
+                            reverse=props.alphabetical_reverse
+                        )
+                else:
+                    image_files.sort(reverse=reversed_order)
+            else:
+                image_files.sort(reverse=reversed_order)
+
         except Exception as e:
-            _report(report_fn, {'ERROR'}, f"Failed to sort image files numerically in {directory}\nError: {e}")
+            _report(report_fn, {'ERROR'}, f"Failed to sort image files in {directory}\nError: {e}")
             return images
 
         # Apply start/end frame slicing

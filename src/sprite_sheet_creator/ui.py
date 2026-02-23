@@ -78,8 +78,16 @@ class SpriteSheetCreatorNode(Node):
         col.prop(props, "source_type")
 
         if props.source_type == 'DIRECTORY':
-            col.label(text="Image Sequence Directory:")
+            col.label(text="Image Directory:")
             col.prop(props, "directory")
+
+            sort_box = col.box()
+            sort_box.label(text="Directory Sorting:")
+            sort_box.prop(props, "use_alphabetical_sort")
+
+            if props.use_alphabetical_sort:
+                sort_box.prop(props, "alphabetical_case_sensitive")
+                sort_box.prop(props, "alphabetical_reverse")
 
         if props.source_type == 'VSE':
             col.prop(props, "use_all_vse_channels")

@@ -71,6 +71,26 @@ class SpriteSheetProperties(PropertyGroup):
         subtype='DIR_PATH'
     )
 
+    # ---------- Directory Sorting ----------
+
+    use_alphabetical_sort: bpy.props.BoolProperty(
+        name="Use Alphabetical Sorting",
+        description="Sort directory images alphabetically instead of using numeric filename filtering",
+        default=True
+    )
+
+    alphabetical_case_sensitive: bpy.props.BoolProperty(
+        name="Case Sensitive",
+        description="Use case-sensitive alphabetical sorting",
+        default=False
+    )
+
+    alphabetical_reverse: bpy.props.BoolProperty(
+        name="Reverse Alphabetical",
+        description="Reverse alphabetical order",
+        default=False
+    )
+
     # ---------- VSE ----------
 
     vse_channel: bpy.props.IntProperty(
