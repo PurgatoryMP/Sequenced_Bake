@@ -1,16 +1,19 @@
-# This file is part of Sequence Bake.
-#
-# Sequence Bake is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# Sequence Bake is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+"""
+    This file is part of Sequence Bake.
+
+    Sequence Bake is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or any later version.
+
+    Sequence Bake is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+
+"""
 
 import bpy
 import os
@@ -69,6 +72,100 @@ def connect_metallic_node(material):
         links.new(src, output.inputs['Surface'])
 
 
+def connect_occlusion_node(material):
+    """
+    Temporarily reroute the Occlusio input for baking.
+
+    steps:
+    1: Add Combine Color Node set to RGB.
+    2: Add Ambient Occlusion Node set to 16 samples with color set to white and connect the AO output socket to the Red input socket of the Combine Color Node.
+    3: Get the current Principled BSDF connected to the material output and get the node connected to the metallic socket and connect it to the Green input socket of the combine color node.
+    4: Get the current Principled BSDF connected to the material output and get the node connected to the roughness socket and connect it to the Blue input socket of the combine color node.
+    5: Create a new temporary Principled BSDF.
+    6: Set the temporary Principled BSDF Base color to black.
+    7: Set the temporary Principled BSDF Roughness to 1.0.
+    8: Connect the Color output socket of the Combine Color node to the Emission Color input socket of the new temporary Principled BSDF
+    9: Set the Emission Strength to 1.0
+    10: Connect the output of the temporary Principled BSDF to the Surface input of the material output node.
+    11: The Frame is baked.
+    12: then we reuse "def reconnect_node(material):" to restore the connections to where they were before.
+    """
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    bsdf = next((n for n in nodes if n.type == 'BSDF_PRINCIPLED'), None)
+    output = next((n for n in nodes if n.type == 'OUTPUT_MATERIAL'), None)
+
+    if not bsdf or not output:
+        raise RuntimeError("Required nodes not found for occlusion bake")
+
+    # --- Create Combine Color ---
+    combine = nodes.new(type='ShaderNodeCombineColor')
+    combine.mode = 'RGB'
+
+    # ✅ INSERT HERE
+    combine.label = "__SEQBAKE_TEMP__"
+
+    # --- Create Ambient Occlusion ---
+    ao = nodes.new(type='ShaderNodeAmbientOcclusion')
+    ao.samples = 16
+    ao.inputs['Color'].default_value = (1, 1, 1, 1)
+
+    # ✅ INSERT HERE
+    ao.label = "__SEQBAKE_TEMP__"
+
+    # AO → R
+    links.new(ao.outputs['Color'], combine.inputs['Red'])
+
+    # Metallic → G
+    if bsdf.inputs['Metallic'].is_linked:
+        metallic_src = bsdf.inputs['Metallic'].links[0].from_socket
+        links.new(metallic_src, combine.inputs['Green'])
+    else:
+        combine.inputs['Green'].default_value = bsdf.inputs['Metallic'].default_value
+
+    # Roughness → B
+    if bsdf.inputs['Roughness'].is_linked:
+        roughness_src = bsdf.inputs['Roughness'].links[0].from_socket
+        links.new(roughness_src, combine.inputs['Blue'])
+    else:
+        combine.inputs['Blue'].default_value = bsdf.inputs['Roughness'].default_value
+
+    # --- Remove existing output links ---
+    for link in list(output.inputs['Surface'].links):
+        links.remove(link)
+
+    # --- Temp Principled ---
+    temp_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+
+    # ✅ INSERT HERE
+    temp_bsdf.label = "__SEQBAKE_TEMP__"
+
+    temp_bsdf.inputs['Base Color'].default_value = (0, 0, 0, 1)
+    temp_bsdf.inputs['Roughness'].default_value = 1.0
+
+    # --- Alpha ---
+    if 'Alpha' in bsdf.inputs and 'Alpha' in temp_bsdf.inputs:
+        if bsdf.inputs['Alpha'].is_linked:
+            alpha_src = bsdf.inputs['Alpha'].links[0].from_socket
+            links.new(alpha_src, temp_bsdf.inputs['Alpha'])
+        else:
+            temp_bsdf.inputs['Alpha'].default_value = bsdf.inputs['Alpha'].default_value
+
+    # --- Normal ---
+    if 'Normal' in bsdf.inputs and 'Normal' in temp_bsdf.inputs:
+        if bsdf.inputs['Normal'].is_linked:
+            normal_src = bsdf.inputs['Normal'].links[0].from_socket
+            links.new(normal_src, temp_bsdf.inputs['Normal'])
+
+    # Combine → Emission
+    links.new(combine.outputs['Color'], temp_bsdf.inputs['Emission Color'])
+    temp_bsdf.inputs['Emission Strength'].default_value = 1.0
+
+    # Output
+    links.new(temp_bsdf.outputs['BSDF'], output.inputs['Surface'])
+
+
 def reconnect_node(material):
     """
     Restore the original material node connections after baking.
@@ -94,13 +191,23 @@ def reconnect_node(material):
     if not bsdf or not output:
         raise RuntimeError("Required nodes not found for reconnect")
 
+    # --- Remove ALL connections to Material Output ---
     for link in list(output.inputs['Surface'].links):
         links.remove(link)
 
+    # --- Restore original BSDF connection ---
     links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
 
+    # --- Cleanup temporary nodes ---
+    TEMP_TAG = "__SEQBAKE_TEMP__"
 
-def create_image_texture(material, name, width, height, alpha, float_buffer, interpolation, projection, extension, colorspace):
+    for node in list(nodes):
+        if node.label == TEMP_TAG:
+            nodes.remove(node)
+
+
+def create_image_texture(material, name, width, height, alpha, float_buffer, interpolation, projection, extension,
+                         colorspace):
     """
     Create and assign a new image texture node for baking.
 
@@ -166,7 +273,7 @@ def bake_frame(bake_type, props, frame, obj, mat, image_node, image, output_dir)
         image (bpy.types.Image): Image datablock receiving the baked result.
         output_dir (str): Directory where the baked image will be saved.
     """
-        
+
     scene = bpy.context.scene
     scene.frame_set(frame)
     bpy.context.view_layer.update()
@@ -220,7 +327,7 @@ def bake_frame(bake_type, props, frame, obj, mat, image_node, image, output_dir)
     )
 
     bpy.ops.object.bake(
-        type=bake_type if bake_type != "METALLIC" else "EMIT",
+        type=("EMIT" if bake_type in {"METALLIC", "OCCLUSION"} else bake_type),
         use_selected_to_active=props.sequenced_selected_to_active,
         cage_extrusion=props.selected_to_active_extrusion,
         max_ray_distance=props.selected_to_active_max_ray_distance,

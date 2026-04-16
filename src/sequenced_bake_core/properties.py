@@ -1,17 +1,19 @@
-# This file is part of Sequence Bake.
-#
-# Sequence Bake is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# Sequence Bake is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+"""
+    This file is part of Sequence Bake.
 
+    Sequence Bake is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or any later version.
+
+    Sequence Bake is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+
+"""
 
 import bpy
 import os
@@ -35,6 +37,21 @@ IMAGE_FORMAT_ITEMS = [
     ("HDR", "Radiance HDR", "Save as Radiance HDR"),
     ("CINEON", "Cineon", "Save as Cineon"),
     ("DPX", "DPX", "Save as DPX"),
+]
+
+NORMAL_MAP_PRESET_ITEMS = [
+    # --- API Conventions ---
+    ('OPENGL', "OpenGL", "Standard OpenGL normal map convention (+Y)"),
+    ('DIRECTX', "DirectX", "DirectX normal map convention (-Y)"),
+
+    # --- Engine Presets ---
+    ('BLENDER', "Blender", "Blender default (OpenGL +Y)"),
+    ('UNITY', "Unity", "Unity default (OpenGL +Y)"),
+    ('UNREAL', "Unreal Engine", "Unreal Engine default (DirectX -Y)"),
+    ('SUBSTANCE', "Substance", "Substance Painter/Designer (OpenGL +Y by default)"),
+
+    # --- Manual ---
+    ('CUSTOM', "Custom", "Manual configuration"),
 ]
 
 NORMAL_MAP_SPACE_ITEMS = [
@@ -384,6 +401,26 @@ COLOR_SPACE_ITEMS = [
 
 
 class SequencedBakeProperties(PropertyGroup):
+    # UI Collapse Toggles
+    ui_show_image_settings: bpy.props.BoolProperty(
+        default=True
+    )
+    ui_show_selected_to_active: bpy.props.BoolProperty(
+        default=False
+    )
+    ui_show_texture_settings: bpy.props.BoolProperty(
+        default=False
+    )
+    ui_show_bake_types: bpy.props.BoolProperty(
+        default=True
+    )
+    ui_show_color_management: bpy.props.BoolProperty(
+        default=False
+    )
+    ui_show_output: bpy.props.BoolProperty(
+        default=True
+    )
+
     sequenced_bake_output_path: bpy.props.StringProperty(
         name="",
         default="",
@@ -465,7 +502,31 @@ class SequencedBakeProperties(PropertyGroup):
         default=False
     )
 
+    def update_normal_map_preset(self, context):
+        preset = self.normal_map_preset
+
+        # --- OpenGL family (+Y) ---
+        if preset in {'OPENGL', 'BLENDER', 'UNITY', 'SUBSTANCE'}:
+            self.normal_map_space = 'TANGENT'
+            self.normal_map_red_channel = 'POS_X'
+            self.normal_map_green_channel = 'POS_Y'
+            self.normal_map_blue_channel = 'POS_Z'
+
+        # --- DirectX family (-Y) ---
+        elif preset in {'DIRECTX', 'UNREAL'}:
+            self.normal_map_space = 'TANGENT'
+            self.normal_map_red_channel = 'POS_X'
+            self.normal_map_green_channel = 'NEG_Y'
+            self.normal_map_blue_channel = 'POS_Z'
+
     # Normal map options.
+    normal_map_preset: bpy.props.EnumProperty(
+        name="Preset",
+        description="Normal map convention preset",
+        items=NORMAL_MAP_PRESET_ITEMS,
+        default='OPENGL',
+        update=update_normal_map_preset
+    )
     normal_map_space: bpy.props.EnumProperty(
         name="Space",
         description="Normal map coordinate space",
@@ -548,6 +609,14 @@ class SequencedBakeProperties(PropertyGroup):
     sequenced_bake_metallic: bpy.props.BoolProperty(
         name="Metallic",
         description='Enable to bake the metallic map for the selected objects active material',
+        default=False
+    )
+    sequenced_bake_occlusion: bpy.props.BoolProperty(
+        name="ORM",
+        description="Enable to bake the ORM map for the selected objects active material\nAn ORM map (Occlusion, "
+                    "Roughness, Metallic) is a PBR texture packing technique that combines three grayscale maps into "
+                    "a single image's RGB channels—Red for Ambient Occlusion, Green for Roughness, and Blue for "
+                    "Metalness.",
         default=False
     )
 
@@ -722,4 +791,80 @@ class SequencedBakeProperties(PropertyGroup):
             ('ALL', "Bake All", "Bake all materials in the object")
         ],
         default='SELECTED',
+    )
+
+    bake_progress: bpy.props.FloatProperty(
+        name="Progress",
+        description="Overall progress of the sequencing bake operation (0.0 - 1.0)",
+        default=0.0,
+        min=0.0,
+        max=1.0,
+        subtype='FACTOR'
+    )
+
+    bake_status: bpy.props.StringProperty(
+        name="Status",
+        description="Current bake execution state (Idle, Baking, Completed, Cancelled)",
+        default="Idle"
+    )
+
+    bake_current_material: bpy.props.StringProperty(
+        name="Material",
+        description="Name of the material currently being processed in the bake queue",
+        default=""
+    )
+
+    bake_frame_info: bpy.props.StringProperty(
+        name="Frame Info",
+        description="Current frame index and total frame range (e.g. '12 / 240')",
+        default=""
+    )
+
+    bake_fps: bpy.props.FloatProperty(
+        name="FPS",
+        description="Actual bake throughput (frames per second)",
+        default=0.0,
+        precision=3
+    )
+
+    bake_estimated_time: bpy.props.StringProperty(
+        name="Estimated Time",
+        description="Estimated remaining bake time based on current progress",
+        default=""
+    )
+
+    bake_cpu_usage: bpy.props.StringProperty(
+        name="CPU Usage",
+        description="Placeholder for CPU usage monitoring (requires external system integration)",
+        default="N/A"
+    )
+
+    bake_memory_usage: bpy.props.StringProperty(
+        name="Memory Usage",
+        description="Placeholder for system memory usage during bake (requires external monitoring)",
+        default="N/A"
+    )
+
+    bake_vram_usage: bpy.props.StringProperty(
+        name="VRAM Usage",
+        description="Placeholder for GPU VRAM usage during bake (requires GPU telemetry integration)",
+        default="N/A"
+    )
+
+    bake_current_type: bpy.props.StringProperty(
+        name="Bake Type",
+        description="Current bake pass type being executed (e.g. Normal, AO, Roughness)",
+        default=""
+    )
+
+    ui_show_bake_controls: bpy.props.BoolProperty(
+        name="Bake Controls",
+        description="Toggle visibility of bake control panel",
+        default=True
+    )
+
+    ui_show_bake_details: bpy.props.BoolProperty(
+        name="Bake Details",
+        description="Toggle visibility of live bake diagnostics panel",
+        default=True
     )

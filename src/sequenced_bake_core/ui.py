@@ -1,20 +1,24 @@
-# This file is part of Sequence Bake.
-#
-# Sequence Bake is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# Sequence Bake is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+"""
+    This file is part of Sequence Bake.
+
+    Sequence Bake is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or any later version.
+
+    Sequence Bake is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+
+"""
 
 import bpy
 from bpy.types import Panel, Node, NodeSocket
 from .properties import SequencedBakeProperties
+
 
 def draw_material_manager_ui(layout, context):
     """
@@ -52,14 +56,16 @@ def draw_material_manager_ui(layout, context):
     )
 
     slot_ops = row.column(align=True)
-    slot_ops.operator("object.material_slot_add", icon='ADD', text="")
-    slot_ops.operator("object.material_slot_remove", icon='REMOVE', text="")
     slot_ops.separator()
-    slot_ops.menu(
-        "OBJECT_MT_material_slot_specials",
-        icon='DOWNARROW_HLT',
-        text=""
-    )
+    slot_ops.operator("object.material_slot_move", icon='TRIA_UP', text="").direction = 'UP'
+    slot_ops.operator("object.material_slot_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
+    slot_ops.separator()
+    if hasattr(bpy.types, "OBJECT_MT_material_slot_specials"):
+        slot_ops.menu(
+            "OBJECT_MT_material_slot_specials",
+            icon='DOWNARROW_HLT',
+            text=""
+        )
 
     # Slot Material Controls
     slot = (
@@ -103,7 +109,7 @@ class SequencedBakeSocket(NodeSocket):
     connections for the Sequenced Bake system. It displays a
     yellow color in the node editor.
 
-    Attributes:
+    Class Attributes:
         bl_idname (str): Blender identifier for the socket type.
         bl_label (str): Human-readable label for the socket.
     """
@@ -155,134 +161,234 @@ def draw_sequenced_bake_ui(layout, props):
             all Sequenced Bake settings.
     """
     option_padding = 2.0
-    
+
     # Material Manager
     if hasattr(props, "show_material_manager") and props.show_material_manager:
         draw_material_manager_ui(layout, bpy.context)
 
-
     # Image Size & Format
     box = layout.box()
-    col = box.column(align=True)
-    col.label(text="Generated Image Size:")
-    row = col.row(align=True)
-    row.prop(props, "sequenced_bake_width")
-    row.prop(props, "sequenced_bake_height")
+    header = box.row()
+    header.prop(
+        props,
+        "ui_show_image_settings",
+        text="Generated Image Settings",
+        emboss=False,
+        icon='TRIA_DOWN' if props.ui_show_image_settings else 'TRIA_RIGHT'
+    )
 
-    col.label(text="Baked Image Format:")
-    col.prop(props, "sequenced_bake_image_format")
+    if props.ui_show_image_settings:
+        col = box.column(align=True)
+        scene = bpy.context.scene
 
-    col.prop(props, "sequence_is_alpha")
-    col.prop(props, "sequence_use_float")
-    col.prop(props, "sequence_clear_baked_maps")
+        # frame range
+        frame_box = col.box()
+        frame_box.label(
+            text=f"Frame Range: {scene.frame_start} : {scene.frame_end} : {scene.frame_end - scene.frame_start + 1}"
+        )
+
+        row = frame_box.row(align=True)
+        row.prop(scene, "frame_start", text="Start")
+        row.prop(scene, "frame_end", text="End")
+        row.prop(scene, "frame_current", text="Current")
+
+        row = frame_box.row(align=True)
+
+        row.prop(props, "sequenced_bake_width")
+        row.prop(props, "sequenced_bake_height")
+
+        col.prop(props, "sequenced_bake_image_format")
+        col.prop(props, "sequence_is_alpha")
+        col.prop(props, "sequence_use_float")
+        col.prop(props, "sequence_clear_baked_maps")
 
     # Selected to Active
     box = layout.box()
-    col = box.column(align=True)
-    col.label(text="Selected to Active:")
-    col.prop(props, "sequenced_selected_to_active")
-    if props.sequenced_selected_to_active:
-        col.label(text="Selected to Active Options:")
-        row = col.row()
-        row.separator(factor=option_padding)
-        row.prop(props, "selected_to_active_cage")
-        if props.selected_to_active_cage:
-            row = col.row()
-            row.separator(factor=option_padding)
-            row.prop(props, "selected_to_active_cage_object")
-        row = col.row()
-        row.separator(factor=option_padding)
-        row.prop(props, "selected_to_active_extrusion")
-        row = col.row()
-        row.separator(factor=option_padding)
-        row.prop(props, "selected_to_active_max_ray_distance")
+    header = box.row()
+    header.prop(
+        props,
+        "ui_show_selected_to_active",
+        text="Selected to Active",
+        emboss=False,
+        icon='TRIA_DOWN' if props.ui_show_selected_to_active else 'TRIA_RIGHT'
+    )
 
+    if props.ui_show_selected_to_active:
+        col = box.column(align=True)
+        col.prop(props, "sequenced_selected_to_active")
+
+        if props.sequenced_selected_to_active:
+            col.prop(props, "selected_to_active_cage")
+            if props.selected_to_active_cage:
+                col.prop(props, "selected_to_active_cage_object")
+            col.prop(props, "selected_to_active_extrusion")
+            col.prop(props, "selected_to_active_max_ray_distance")
 
     # Image Texture Settings
     box = layout.box()
-    col = box.column(align=True)
-    col.label(text="Image Texture Settings:")
-    col.prop(props, "interpolation")
-    col.prop(props, "projection")
-    col.prop(props, "extension")
-    col.prop(props, "colorspace")
+    header = box.row()
+    header.prop(
+        props,
+        "ui_show_texture_settings",
+        text="Image Texture Settings",
+        emboss=False,
+        icon='TRIA_DOWN' if props.ui_show_texture_settings else 'TRIA_RIGHT'
+    )
+
+    if props.ui_show_texture_settings:
+        col = box.column(align=True)
+        col.prop(props, "interpolation")
+        col.prop(props, "projection")
+        col.prop(props, "extension")
+        col.prop(props, "colorspace")
 
     # Bake Type Options
     box = layout.box()
-    col = box.column(align=True)
-    col.label(text="Bake Type Options:")
+    header = box.row()
+    header.prop(
+        props,
+        "ui_show_bake_types",
+        text="Bake Type Options",
+        emboss=False,
+        icon='TRIA_DOWN' if props.ui_show_bake_types else 'TRIA_RIGHT'
+    )
+    if props.ui_show_bake_types:
+        col = box.column(align=True)
 
-    col.prop(props, "sequenced_bake_normal")
-    if props.sequenced_bake_normal:
-        col.label(text="Normal Map Options:")
-        for ch in ["space", "red_channel", "green_channel", "blue_channel"]:
-            row = col.row()
-            row.separator(factor=option_padding)
-            row.prop(props, f"normal_map_{ch}")
+        col.prop(props, "sequenced_bake_normal")
+        if props.sequenced_bake_normal:
+            col.label(text="Normal Map Options:")
 
-    col.prop(props, "sequenced_bake_roughness")
-    col.prop(props, "sequenced_bake_glossy")
-    if props.sequenced_bake_glossy:
-        col.label(text="Lighting Contributions:")
-        for attr in ["glossy_lighting_direct", "glossy_lighting_indirect", "glossy_lighting_color"]:
-            row = col.row()
-            row.separator(factor=option_padding)
-            row.prop(props, attr, text=attr.split("_")[-1].capitalize())
+            for ch in ["preset", "space", "red_channel", "green_channel", "blue_channel"]:
+                row = col.row()
+                row.separator(factor=option_padding)
+                row.prop(props, f"normal_map_{ch}")
 
-    col.prop(props, "sequenced_bake_emission")
-    col.prop(props, "sequenced_bake_ambient_occlusion")
-    col.prop(props, "sequenced_bake_shadow")
-    col.prop(props, "sequenced_bake_position")
-    col.prop(props, "sequenced_bake_uv")
-    col.prop(props, "sequenced_bake_environment")
-    col.prop(props, "sequenced_bake_diffuse")
-    if props.sequenced_bake_diffuse:
-        col.label(text="Lighting Contributions:")
-        for attr in ["diffuse_lighting_direct", "diffuse_lighting_indirect", "diffuse_lighting_color"]:
-            row = col.row()
-            row.separator(factor=option_padding)
-            row.prop(props, attr, text=attr.split("_")[-1].capitalize())
+        col.prop(props, "sequenced_bake_roughness")
+        col.prop(props, "sequenced_bake_glossy")
+        if props.sequenced_bake_glossy:
+            col.label(text="Lighting Contributions:")
+            for attr in ["glossy_lighting_direct", "glossy_lighting_indirect", "glossy_lighting_color"]:
+                row = col.row()
+                row.separator(factor=option_padding)
+                row.prop(props, attr, text=attr.split("_")[-1].capitalize())
 
-    col.prop(props, "sequenced_bake_transmission")
-    if props.sequenced_bake_transmission:
-        col.label(text="Lighting Contributions:")
-        for attr in ["transmission_lighting_direct", "transmission_lighting_indirect", "transmission_lighting_color"]:
-            row = col.row()
-            row.separator(factor=option_padding)
-            row.prop(props, attr, text=attr.split("_")[-1].capitalize())
+        col.prop(props, "sequenced_bake_emission")
+        col.prop(props, "sequenced_bake_ambient_occlusion")
+        col.prop(props, "sequenced_bake_shadow")
+        col.prop(props, "sequenced_bake_position")
+        col.prop(props, "sequenced_bake_uv")
+        col.prop(props, "sequenced_bake_environment")
+        col.prop(props, "sequenced_bake_diffuse")
+        if props.sequenced_bake_diffuse:
+            col.label(text="Lighting Contributions:")
+            for attr in ["diffuse_lighting_direct", "diffuse_lighting_indirect", "diffuse_lighting_color"]:
+                row = col.row()
+                row.separator(factor=option_padding)
+                row.prop(props, attr, text=attr.split("_")[-1].capitalize())
 
-    col.prop(props, "sequenced_bake_combined")
-    if props.sequenced_bake_combined:
-        col.label(text="Lighting Contributions:")
-        for attr in ["combined_lighting_direct", "combined_lighting_indirect",
-                     "combined_contribution_deffuse", "combined_contribution_glossy",
-                     "combined_contribution_transmission", "combined_contribution_emit"]:
-            row = col.row()
-            row.separator(factor=option_padding)
-            row.prop(props, attr)
+        col.prop(props, "sequenced_bake_transmission")
+        if props.sequenced_bake_transmission:
+            col.label(text="Lighting Contributions:")
+            for attr in ["transmission_lighting_direct", "transmission_lighting_indirect",
+                         "transmission_lighting_color"]:
+                row = col.row()
+                row.separator(factor=option_padding)
+                row.prop(props, attr, text=attr.split("_")[-1].capitalize())
 
-    col.prop(props, "sequenced_bake_metallic")
+        col.prop(props, "sequenced_bake_combined")
+        if props.sequenced_bake_combined:
+            col.label(text="Lighting Contributions:")
+            for attr in ["combined_lighting_direct", "combined_lighting_indirect",
+                         "combined_contribution_diffuse", "combined_contribution_glossy",
+                         "combined_contribution_transmission", "combined_contribution_emit"]:
+                row = col.row()
+                row.separator(factor=option_padding)
+                row.prop(props, attr)
+
+        col.prop(props, "sequenced_bake_metallic")
+
+        col.prop(props, "sequenced_bake_occlusion")
 
     # Color Management
     box = layout.box()
-    col = box.column(align=True)
-    col.label(text="Color Management:")
-    for attr in ["display_device", "view_transform", "look", "exposure", "gamma", "sequencer"]:
-        col.prop(props, attr)
-    
+    header = box.row()
+    header.prop(
+        props,
+        "ui_show_color_management",
+        text="Color Management",
+        emboss=False,
+        icon='TRIA_DOWN' if props.ui_show_color_management else 'TRIA_RIGHT'
+    )
+    if props.ui_show_color_management:
+        col = box.column(align=True)
+        for attr in ["display_device", "view_transform", "look", "exposure", "gamma", "sequencer"]:
+            col.prop(props, attr)
+
     # Material Output
     box = layout.box()
-    col = box.column(align=True)
-    col.label(text="Material Output Path:")
-    col.prop(props, "sequenced_bake_output_path")
-    
-    # Bake Operator
-    box = layout.box()
-    col = box.column(align=True)
-    col.prop(props, "bake_mode")
-    row.separator(factor=option_padding)
-    col.operator("sequenced_bake.bake", text="Bake Material Sequence")
+    header = box.row()
+    header.prop(
+        props,
+        "ui_show_bake_controls",
+        text="Bake Controls",
+        emboss=False,
+        icon='TRIA_DOWN' if getattr(props, "ui_show_bake_controls", True)
+        else 'TRIA_RIGHT'
+    )
 
+    if getattr(props, "ui_show_bake_controls", True):
+        col = box.column(align=True)
+
+        col.label(text="Bake Controls:")
+        col.prop(props, "bake_mode")
+
+        col.label(text="Material Output Path:")
+        col.prop(props, "sequenced_bake_output_path")
+
+        col.separator(factor=1.0)
+
+        col.operator(
+            "sequenced_bake.bake",
+            text="Bake Material Sequence",
+            icon='RENDER_STILL'
+        )
+
+        col.separator()
+
+        col.label(text="Bake Progress:")
+
+        row = col.row(align=True)
+        row.prop(props, "bake_progress", text="")
+        row.enabled = False
+
+    # Bake Details
+    box = layout.box()
+
+    header = box.row()
+    header.prop(
+        props,
+        "ui_show_bake_details",
+        text="Bake Details",
+        emboss=False,
+        icon='TRIA_DOWN' if props.ui_show_bake_details else 'TRIA_RIGHT'
+    )
+
+    if props.ui_show_bake_details:
+        col = box.column(align=True)
+
+        col.label(text=f"Status: {props.bake_status}")
+        col.label(text=f"Material: {props.bake_current_material}")
+        col.label(text=f"Bake Type: {props.bake_current_type}")
+        col.label(text=f"Frame#: {props.bake_frame_info}")
+        col.label(text="FPS: %.3f" % props.bake_fps)
+        col.label(text=f"Time Remaining: {props.bake_estimated_time}")
+
+        # col.separator()
+        #
+        # col.label(text=f"CPU Usage: {props.bake_cpu_usage}")
+        # col.label(text=f"Memory Usage: {props.bake_memory_usage}")
+        # col.label(text=f"VRAM Usage: {props.bake_vram_usage}")
 
 
 class SequencedBakePanel(Panel):
@@ -293,7 +399,7 @@ class SequencedBakePanel(Panel):
     sidebar. Uses the draw_sequenced_bake_ui helper to render
     the full configuration interface.
 
-    Attributes:
+    Class Attributes:
         bl_label (str): Panel label shown in Blender.
         bl_idname (str): Blender identifier for the panel.
         bl_space_type (str): Space type where the panel is displayed.
@@ -324,7 +430,7 @@ class SequencedBakeNode(Node):
     material baking sequences. Mirrors the settings available in the
     UI panel.
 
-    Attributes:
+    Class Attributes:
         bl_idname (str): Blender identifier for the node type.
         bl_label (str): Node label displayed in the editor.
         bl_description (str): Tooltip description.
