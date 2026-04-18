@@ -310,6 +310,8 @@ def draw_sequenced_bake_ui(layout, props):
 
         col.prop(props, "sequenced_bake_occlusion")
 
+        # col.prop(props, "sequenced_bake_sculpt") <------------------------- WIP
+
     # Color Management
     box = layout.box()
     header = box.row()
@@ -341,7 +343,20 @@ def draw_sequenced_bake_ui(layout, props):
         col = box.column(align=True)
 
         col.label(text="Bake Controls:")
-        col.prop(props, "bake_mode")
+        col.label(text="Bake Scope:")
+        col.prop(props, "material_mode")
+        col.prop(props, "frame_mode")
+
+        if props.frame_mode == 'SEQUENCE':
+            col.prop(props, "frame_step")
+
+        if props.frame_mode == 'CURRENT':
+            col.label(text="Only current frame will be baked", icon='INFO')
+        else:
+            col.label(
+                text=f"Frames: {bpy.context.scene.frame_start} → {bpy.context.scene.frame_end} (step {props.frame_step})",
+                icon='TIME'
+            )
 
         col.label(text="Material Output Path:")
         col.prop(props, "sequenced_bake_output_path")

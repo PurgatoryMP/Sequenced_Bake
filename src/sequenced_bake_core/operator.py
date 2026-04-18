@@ -26,6 +26,7 @@ from .processing import (
     reconnect_node,
     create_image_texture,
     bake_frame,
+    connect_sculpt_node,
 )
 
 
@@ -150,7 +151,7 @@ class SequencedBakeOperator(bpy.types.Operator):
             return {'CANCELLED'}
 
         # materials
-        if props.bake_mode == 'ALL':
+        if props.material_mode == 'ALL':
             self._materials = [
                 slot.material for slot in self._obj.material_slots if slot.material
             ]
@@ -177,9 +178,21 @@ class SequencedBakeOperator(bpy.types.Operator):
             "COMBINED": props.sequenced_bake_combined,
             "METALLIC": props.sequenced_bake_metallic,
             "OCCLUSION": props.sequenced_bake_occlusion,
+            "SCULPT": props.sequenced_bake_sculpt,
         }
 
-        self._frames = list(range(scene.frame_start, scene.frame_end + 1))
+        if props.frame_mode == 'CURRENT':
+            self._frames = [scene.frame_current]
+        else:
+            step = max(1, props.frame_step)
+
+            self._frames = list(
+                range(
+                    scene.frame_start,
+                    scene.frame_end + 1,
+                    step
+                )
+            )
 
         # build task queue
         self._build_tasks()
@@ -312,6 +325,9 @@ class SequencedBakeOperator(bpy.types.Operator):
         if bake_type == "OCCLUSION":
             connect_occlusion_node(mat)
 
+        if bake_type == "SCULPT":
+            connect_sculpt_node(mat, self._obj)
+
         bake_dir = os.path.join(
             bpy.path.abspath(props.sequenced_bake_output_path),
             f"{self._obj.name}_{mat.name}_{bake_type}"
@@ -348,6 +364,9 @@ class SequencedBakeOperator(bpy.types.Operator):
 
         if bake_type == "OCCLUSION":
             reconnect_node(mat)
+
+        # if bake_type == "SCULPT":
+        #     reconnect_node(mat)
 
         # FRAME TIMING 
         frame_end_time = time.time()

@@ -619,6 +619,11 @@ class SequencedBakeProperties(PropertyGroup):
                     "Metalness.",
         default=False
     )
+    sequenced_bake_sculpt: bpy.props.BoolProperty(
+        name="Sculpt",
+        description="Enable to bake sculpt data (custom node setup)",
+        default=False
+    )
 
     # Lighting options.
     diffuse_lighting_direct: bpy.props.BoolProperty(
@@ -782,15 +787,33 @@ class SequencedBakeProperties(PropertyGroup):
         description="Show material management UI in the add-on",
         default=True
     )
-    
-    bake_mode: bpy.props.EnumProperty(
-        name="Bake Mode",
-        description="Bake only selected material or all materials",
+
+    material_mode: bpy.props.EnumProperty(
+        name="Material Scope",
+        description="Bake only active material or all materials",
         items=[
-            ('SELECTED', "Bake Selected", "Bake only the active material"),
-            ('ALL', "Bake All", "Bake all materials in the object")
+            ('SELECTED', "Active Material", "Bake only the active material"),
+            ('ALL', "All Materials", "Bake all materials in the object")
         ],
         default='SELECTED',
+    )
+
+    frame_mode: bpy.props.EnumProperty(
+        name="Frame Scope",
+        description="Control whether to bake a full frame range or only the current frame",
+        items=[
+            ('SEQUENCE', "Frame Sequence", "Bake across the full frame range"),
+            ('CURRENT', "Current Frame", "Bake only the current frame"),
+        ],
+        default='SEQUENCE',
+    )
+
+    frame_step: bpy.props.IntProperty(
+        name="Frame Step",
+        description="Step interval between frames when baking a sequence (e.g. 2 = every other frame)",
+        default=1,
+        min=1,
+        max=1000,
     )
 
     bake_progress: bpy.props.FloatProperty(
