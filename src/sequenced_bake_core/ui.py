@@ -310,7 +310,30 @@ def draw_sequenced_bake_ui(layout, props):
 
         col.prop(props, "sequenced_bake_occlusion")
 
-        # col.prop(props, "sequenced_bake_sculpt") <------------------------- WIP
+        col.prop(props, "sequenced_bake_sculpt")
+
+        if props.sequenced_bake_sculpt:
+            col.label(text="Sculpt Map Bounds:")
+
+            for attr in [
+                "sequenced_sculpt_show_bbox",
+                "sequenced_sculpt_bbox_dynamic",
+                "sequenced_sculpt_bbox_scale",
+            ]:
+                row = col.row()
+                row.separator(factor=option_padding)
+                row.prop(props, attr)
+
+            col.label(text="Sculpt Map Transforms:")
+
+            for attr in [
+                "sequenced_sculpt_offset_x",
+                "sequenced_sculpt_offset_y",
+                "sequenced_sculpt_offset_z",
+            ]:
+                row = col.row()
+                row.separator(factor=option_padding)
+                row.prop(props, attr)
 
     # Color Management
     box = layout.box()
@@ -398,12 +421,6 @@ def draw_sequenced_bake_ui(layout, props):
         col.label(text=f"Frame#: {props.bake_frame_info}")
         col.label(text="FPS: %.3f" % props.bake_fps)
         col.label(text=f"Time Remaining: {props.bake_estimated_time}")
-
-        # col.separator()
-        #
-        # col.label(text=f"CPU Usage: {props.bake_cpu_usage}")
-        # col.label(text=f"Memory Usage: {props.bake_memory_usage}")
-        # col.label(text=f"VRAM Usage: {props.bake_vram_usage}")
 
 
 class SequencedBakePanel(Panel):

@@ -620,9 +620,45 @@ class SequencedBakeProperties(PropertyGroup):
         default=False
     )
     sequenced_bake_sculpt: bpy.props.BoolProperty(
-        name="Sculpt",
-        description="Enable to bake sculpt data (custom node setup)",
+        name="Sculpt (Beta)",
+        description=(
+            "Bake object-space position data into a normalized sculpt map using a custom node setup. "
+            "This feature is experimental and currently works best with simple meshes that fully occupy "
+            "a square UV layout. More complex geometry, non-uniform UVs, or partial UV coverage may produce "
+            "inconsistent or clipped results. Behavior is still in development and subject to change."
+        ),
         default=False
+    )
+    sequenced_sculpt_offset_x: bpy.props.FloatProperty(
+        name="Sculpt Offset X",
+        description="Offset the model along X relative to the sculpt bounding box center",
+        default=0.0,
+    )
+    sequenced_sculpt_offset_y: bpy.props.FloatProperty(
+        name="Sculpt Offset Y",
+        description="Offset the model along Y relative to the sculpt bounding box center",
+        default=0.0,
+    )
+    sequenced_sculpt_offset_z: bpy.props.FloatProperty(
+        name="Sculpt Offset Z",
+        description="Offset the model along Z relative to the sculpt bounding box base",
+        default=0.0,
+    )
+    sequenced_sculpt_show_bbox: bpy.props.BoolProperty(
+        name="Show Sculpt Bounding Box",
+        description="Displays a wireframe cube representing the sculpt projection bounds",
+        default=False
+    )
+    sequenced_sculpt_bbox_dynamic: bpy.props.BoolProperty(
+        name="Dynamic Bounding Box",
+        description="If enabled, bounding box updates from mesh every bake/update. If disabled, uses last computed size",
+        default=True
+    )
+    sequenced_sculpt_bbox_scale: bpy.props.FloatProperty(
+        name="Bounding Box Scale",
+        description="Uniform multiplier applied to sculpt bounding box size",
+        default=1.0,
+        min=0.001,
     )
 
     # Lighting options.

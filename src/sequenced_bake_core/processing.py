@@ -167,21 +167,103 @@ def connect_occlusion_node(material):
     links.new(temp_bsdf.outputs['BSDF'], output.inputs['Surface'])
 
 
-def connect_sculpt_node(material, obj):
+def create_sculpt_bbox_helper(obj, min_v, max_v, bbox_scale=1.0):
+    name = "__SEQBAKE_SCULPT_BBOX__"
+
+    # Remove existing helper if present
+    old = bpy.data.objects.get(name)
+    if old:
+        bpy.data.objects.remove(old, do_unlink=True)
+
+    size = (max_v - min_v) * bbox_scale
+    center = (max_v + min_v) * 0.5
+
+    # Build a unit cube mesh centered on origin
+    verts = [
+        (-1.0, -1.0, -1.0),
+        (-1.0, -1.0,  1.0),
+        (-1.0,  1.0, -1.0),
+        (-1.0,  1.0,  1.0),
+        ( 1.0, -1.0, -1.0),
+        ( 1.0, -1.0,  1.0),
+        ( 1.0,  1.0, -1.0),
+        ( 1.0,  1.0,  1.0),
+    ]
+
+    faces = [
+        (0, 1, 3, 2),
+        (4, 6, 7, 5),
+        (0, 4, 5, 1),
+        (2, 3, 7, 6),
+        (0, 2, 6, 4),
+        (1, 5, 7, 3),
+    ]
+
+    mesh = bpy.data.meshes.new(name + "_MESH")
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+
+    cube = bpy.data.objects.new(name, mesh)
+
+    # Link to a visible collection
+    collection = obj.users_collection[0] if obj.users_collection else bpy.context.scene.collection
+    collection.objects.link(cube)
+
+    # Parent it to the target object so it follows transforms
+    cube.parent = obj
+    cube.matrix_parent_inverse.identity()
+
+    # Local transform relative to parent
+    cube.location = center
+    cube.scale = size * 0.5
+
+    # Display settings
+    cube.display_type = 'WIRE'
+    cube.hide_render = True
+    cube.hide_select = True
+    cube.hide_viewport = False
+    cube.show_in_front = True
+
+    return cube
+
+
+def get_cached_bbox(obj):
+    return obj.get("__seqbake_bbox_cache__", None)
+
+
+def set_cached_bbox(obj, min_v, max_v):
+    obj["__seqbake_bbox_cache__"] = {
+        "min": [min_v.x, min_v.y, min_v.z],
+        "max": [max_v.x, max_v.y, max_v.z],
+    }
+
+def remove_sculpt_bbox_helper():
+    obj = bpy.data.objects.get("__SEQBAKE_SCULPT_BBOX__")
+    if obj:
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+
+def connect_sculpt_node(material, obj=None, props=None):
     """
     Temporarily reroute the material to output a sculpt map.
 
-    Encodes object-space vertex positions into RGB:
-        R = normalized X
-        G = normalized Y
-        B = normalized Z
-
-    Uses object-space bounding box (NOT world space).
-
-    Args:
-        material (bpy.types.Material)
-        obj (bpy.types.Object)
+    Supports:
+        connect_sculpt_node(material, obj, props)
+    and, for backward compatibility:
+        connect_sculpt_node(material, props)
     """
+
+    # Backward-compatibility fallback:
+    # If called as connect_sculpt_node(material, props), obj is actually props.
+    if props is None:
+        props = obj
+        obj = bpy.context.active_object
+
+    if obj is None:
+        raise RuntimeError("connect_sculpt_node: target object is missing")
+
+    if props is None:
+        raise RuntimeError("connect_sculpt_node: props is missing")
 
     nodes = material.node_tree.nodes
     links = material.node_tree.links
@@ -193,32 +275,70 @@ def connect_sculpt_node(material, obj):
     if not output:
         raise RuntimeError("Material Output not found for sculpt bake")
 
-    # --- Compute Bounding Box (OBJECT SPACE ONLY) ---
+    # --- Evaluated mesh ---
     depsgraph = bpy.context.evaluated_depsgraph_get()
     eval_obj = obj.evaluated_get(depsgraph)
     mesh = eval_obj.data
 
-    # Collect vertex positions (OBJECT SPACE)
     verts = [v.co for v in mesh.vertices]
+    if not verts:
+        raise RuntimeError("Sculpt bake mesh has no vertices")
 
-    min_v = Vector((
+    min_v_live = Vector((
         min(v.x for v in verts),
         min(v.y for v in verts),
         min(v.z for v in verts),
     ))
 
-    max_v = Vector((
+    max_v_live = Vector((
         max(v.x for v in verts),
         max(v.y for v in verts),
         max(v.z for v in verts),
     ))
 
-    size_v = max_v - min_v
+    # --- Resolve bounding mode ---
+    if props.sequenced_sculpt_bbox_dynamic:
+        bbox_min = min_v_live
+        bbox_max = max_v_live
+        set_cached_bbox(obj, bbox_min, bbox_max)
+    else:
+        cached = get_cached_bbox(obj)
+        if cached and "min" in cached and "max" in cached:
+            bbox_min = Vector(cached["min"])
+            bbox_max = Vector(cached["max"])
+        else:
+            bbox_min = min_v_live
+            bbox_max = max_v_live
+            set_cached_bbox(obj, bbox_min, bbox_max)
+
+    bbox_scale = props.sequenced_sculpt_bbox_scale
+
+    size_v = (bbox_max - bbox_min) * bbox_scale
 
     # Prevent divide by zero
     size_v.x = size_v.x if abs(size_v.x) > 1e-6 else 1e-6
     size_v.y = size_v.y if abs(size_v.y) > 1e-6 else 1e-6
     size_v.z = size_v.z if abs(size_v.z) > 1e-6 else 1e-6
+
+    # --- Helper cube ---
+    if props.sequenced_sculpt_show_bbox:
+        create_sculpt_bbox_helper(obj, bbox_min, bbox_max, bbox_scale)
+    else:
+        remove_sculpt_bbox_helper()
+
+    # --- Sculpt mapping baseline ---
+    base_offset_v = Vector((0.0, 0.0, bbox_min.z))
+    base_scale_v = Vector((2.0, 2.0, size_v.z))
+
+    # --- User offsets ---
+    user_offset_v = Vector((
+        props.sequenced_sculpt_offset_x,
+        props.sequenced_sculpt_offset_y,
+        props.sequenced_sculpt_offset_z,
+    ))
+
+    offset_v = base_offset_v + user_offset_v
+    scale_v = base_scale_v
 
     # --- Clear existing Surface links ---
     for link in list(output.inputs['Surface'].links):
@@ -236,74 +356,83 @@ def connect_sculpt_node(material, obj):
     div.operation = 'DIVIDE'
     div.label = TEMP_TAG
 
+    add = nodes.new(type='ShaderNodeVectorMath')
+    add.operation = 'ADD'
+    add.label = TEMP_TAG
+
     emission = nodes.new(type='ShaderNodeEmission')
     emission.label = TEMP_TAG
 
-    # --- Value nodes (vectors) ---
-    min_node = nodes.new(type='ShaderNodeCombineXYZ')
-    min_node.label = TEMP_TAG
-    min_node.inputs[0].default_value = min_v.x
-    min_node.inputs[1].default_value = min_v.y
-    min_node.inputs[2].default_value = min_v.z
+    # --- Constant nodes ---
+    offset_node = nodes.new(type='ShaderNodeCombineXYZ')
+    offset_node.label = TEMP_TAG
+    offset_node.inputs[0].default_value = offset_v.x
+    offset_node.inputs[1].default_value = offset_v.y
+    offset_node.inputs[2].default_value = offset_v.z
 
-    size_node = nodes.new(type='ShaderNodeCombineXYZ')
-    size_node.label = TEMP_TAG
-    size_node.inputs[0].default_value = size_v.x
-    size_node.inputs[1].default_value = size_v.y
-    size_node.inputs[2].default_value = size_v.z
+    scale_node = nodes.new(type='ShaderNodeCombineXYZ')
+    scale_node.label = TEMP_TAG
+    scale_node.inputs[0].default_value = scale_v.x
+    scale_node.inputs[1].default_value = scale_v.y
+    scale_node.inputs[2].default_value = scale_v.z
+
+    half_node = nodes.new(type='ShaderNodeCombineXYZ')
+    half_node.label = TEMP_TAG
+    half_node.inputs[0].default_value = 0.5
+    half_node.inputs[1].default_value = 0.5
+    half_node.inputs[2].default_value = 0.0
 
     # --- Wiring ---
-    # Position → subtract min
     links.new(geom.outputs['Position'], sub.inputs[0])
-    links.new(min_node.outputs['Vector'], sub.inputs[1])
+    links.new(offset_node.outputs['Vector'], sub.inputs[1])
 
-    # Normalize → divide by size
     links.new(sub.outputs['Vector'], div.inputs[0])
-    links.new(size_node.outputs['Vector'], div.inputs[1])
+    links.new(scale_node.outputs['Vector'], div.inputs[1])
 
-    # To emission
-    links.new(div.outputs['Vector'], emission.inputs['Color'])
+    links.new(div.outputs['Vector'], add.inputs[0])
+    links.new(half_node.outputs['Vector'], add.inputs[1])
+
+    links.new(add.outputs['Vector'], emission.inputs['Color'])
     emission.inputs['Strength'].default_value = 1.0
 
-    # Output
     links.new(emission.outputs['Emission'], output.inputs['Surface'])
 
 
 def reconnect_node(material):
     """
-    Restore the original material node connections after baking.
+    Restore material after baking.
 
-    This function removes any temporary links connected to the Material Output
-    surface socket and reconnects the Principled BSDF output, restoring the
-    material to its original shading configuration.
-
-    Args:
-        material (bpy.types.Material): The material whose node tree should
-            be restored.
-
-    Raises:
-        RuntimeError: If the Principled BSDF or Material Output node cannot
-            be found in the material's node tree.
+    - Removes temporary nodes
+    - Restores BSDF → Output if available
+    - Fails gracefully if not
     """
+
     nodes = material.node_tree.nodes
     links = material.node_tree.links
+
+    TEMP_TAG = "__SEQBAKE_TEMP__"
 
     bsdf = next((n for n in nodes if n.type == 'BSDF_PRINCIPLED'), None)
     output = next((n for n in nodes if n.type == 'OUTPUT_MATERIAL'), None)
 
-    if not bsdf or not output:
-        raise RuntimeError("Required nodes not found for reconnect")
+    if not output:
+        print("[Sequenced Bake] WARNING: No Material Output node found.")
+        return
 
-    # --- Remove ALL connections to Material Output ---
+    # --- Remove only TEMP connections ---
     for link in list(output.inputs['Surface'].links):
-        links.remove(link)
+        if link.from_node.label == TEMP_TAG:
+            links.remove(link)
 
-    # --- Restore original BSDF connection ---
-    links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+    # --- Restore BSDF if available ---
+    if bsdf:
+        # Only reconnect if nothing is connected
+        if not output.inputs['Surface'].is_linked:
+            links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+    else:
+        print("[Sequenced Bake] WARNING: No Principled BSDF found, skipping reconnect.")
 
-    # --- Cleanup temporary nodes ---
-    TEMP_TAG = "__SEQBAKE_TEMP__"
-
+    # --- Cleanup temp nodes ---
     for node in list(nodes):
         if node.label == TEMP_TAG:
             nodes.remove(node)

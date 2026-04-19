@@ -326,13 +326,19 @@ class SequencedBakeOperator(bpy.types.Operator):
             connect_occlusion_node(mat)
 
         if bake_type == "SCULPT":
-            connect_sculpt_node(mat, self._obj)
+            connect_sculpt_node(mat, self._obj, bpy.context.scene.sequenced_bake_props)
 
         bake_dir = os.path.join(
             bpy.path.abspath(props.sequenced_bake_output_path),
             f"{self._obj.name}_{mat.name}_{bake_type}"
         )
         os.makedirs(bake_dir, exist_ok=True)
+
+        # Color space override for data maps
+        colorspace = props.colorspace
+
+        if bake_type in {"SCULPT", "NORMAL", "ROUGHNESS", "METALLIC", "OCCLUSION"}:
+            colorspace = "Non-Color"
 
         image_node, image = create_image_texture(
             material=mat,
@@ -344,7 +350,7 @@ class SequencedBakeOperator(bpy.types.Operator):
             interpolation=props.interpolation,
             projection=props.projection,
             extension=props.extension,
-            colorspace=props.colorspace,
+            colorspace=colorspace,
         )
 
         # BAKING
@@ -365,8 +371,8 @@ class SequencedBakeOperator(bpy.types.Operator):
         if bake_type == "OCCLUSION":
             reconnect_node(mat)
 
-        # if bake_type == "SCULPT":
-        #     reconnect_node(mat)
+        if bake_type == "SCULPT":
+            reconnect_node(mat)
 
         # FRAME TIMING 
         frame_end_time = time.time()
