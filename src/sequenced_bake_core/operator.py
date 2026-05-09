@@ -26,7 +26,7 @@ from .processing import (
     reconnect_node,
     create_image_texture,
     bake_frame,
-    connect_sculpt_node,
+    calculate_sculpt_bounds,
 )
 
 
@@ -102,6 +102,7 @@ class SequencedBakeOperator(bpy.types.Operator):
     _obj = None
     _props = None
     _scene = None
+    _sculpt_normalization_bounds = None
 
     def invoke(self, context, event):
         """
@@ -193,6 +194,26 @@ class SequencedBakeOperator(bpy.types.Operator):
                     step
                 )
             )
+
+        # Precompute sculpt normalization bounds
+        self._sculpt_normalization_bounds = None
+
+        if self._bake_map.get("SCULPT"):
+
+            if props.frame_mode == 'SEQUENCE':
+                bounds_frame = scene.frame_start
+            else:
+                bounds_frame = scene.frame_current
+
+            current_frame = scene.frame_current
+
+            scene.frame_set(bounds_frame)
+            bpy.context.view_layer.update()
+
+            self._sculpt_normalization_bounds = calculate_sculpt_bounds(self._obj)
+
+            scene.frame_set(current_frame)
+            bpy.context.view_layer.update()
 
         # build task queue
         self._build_tasks()
@@ -325,9 +346,6 @@ class SequencedBakeOperator(bpy.types.Operator):
         if bake_type == "OCCLUSION":
             connect_occlusion_node(mat)
 
-        if bake_type == "SCULPT":
-            connect_sculpt_node(mat, self._obj, bpy.context.scene.sequenced_bake_props)
-
         bake_dir = os.path.join(
             bpy.path.abspath(props.sequenced_bake_output_path),
             f"{self._obj.name}_{mat.name}_{bake_type}"
@@ -337,7 +355,7 @@ class SequencedBakeOperator(bpy.types.Operator):
         # Color space override for data maps
         colorspace = props.colorspace
 
-        if bake_type in {"SCULPT", "NORMAL", "ROUGHNESS", "METALLIC", "OCCLUSION"}:
+        if bake_type in {"NORMAL", "ROUGHNESS", "METALLIC", "OCCLUSION"}:
             colorspace = "Non-Color"
 
         image_node, image = create_image_texture(
@@ -363,15 +381,13 @@ class SequencedBakeOperator(bpy.types.Operator):
             image_node=image_node,
             image=image,
             output_dir=bake_dir,
+            sculpt_bounds=self._sculpt_normalization_bounds,
         )
 
         if bake_type == "METALLIC":
             reconnect_node(mat)
 
         if bake_type == "OCCLUSION":
-            reconnect_node(mat)
-
-        if bake_type == "SCULPT":
             reconnect_node(mat)
 
         # FRAME TIMING 

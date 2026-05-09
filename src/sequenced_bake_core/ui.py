@@ -312,29 +312,6 @@ def draw_sequenced_bake_ui(layout, props):
 
         col.prop(props, "sequenced_bake_sculpt")
 
-        if props.sequenced_bake_sculpt:
-            col.label(text="Sculpt Map Bounds:")
-
-            for attr in [
-                "sequenced_sculpt_show_bbox",
-                "sequenced_sculpt_bbox_dynamic",
-                "sequenced_sculpt_bbox_scale",
-            ]:
-                row = col.row()
-                row.separator(factor=option_padding)
-                row.prop(props, attr)
-
-            col.label(text="Sculpt Map Transforms:")
-
-            for attr in [
-                "sequenced_sculpt_offset_x",
-                "sequenced_sculpt_offset_y",
-                "sequenced_sculpt_offset_z",
-            ]:
-                row = col.row()
-                row.separator(factor=option_padding)
-                row.prop(props, attr)
-
     # Color Management
     box = layout.box()
     header = box.row()

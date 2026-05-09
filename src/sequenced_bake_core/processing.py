@@ -16,6 +16,8 @@
 """
 
 import bpy
+import bmesh
+import numpy as np
 from mathutils import Vector
 import os
 
@@ -167,274 +169,247 @@ def connect_occlusion_node(material):
     links.new(temp_bsdf.outputs['BSDF'], output.inputs['Surface'])
 
 
-def create_sculpt_bbox_helper(obj, min_v, max_v, bbox_scale=1.0):
-    name = "__SEQBAKE_SCULPT_BBOX__"
-
-    # Remove existing helper if present
-    old = bpy.data.objects.get(name)
-    if old:
-        bpy.data.objects.remove(old, do_unlink=True)
-
-    size = (max_v - min_v) * bbox_scale
-    center = (max_v + min_v) * 0.5
-
-    # Build a unit cube mesh centered on origin
-    verts = [
-        (-1.0, -1.0, -1.0),
-        (-1.0, -1.0,  1.0),
-        (-1.0,  1.0, -1.0),
-        (-1.0,  1.0,  1.0),
-        ( 1.0, -1.0, -1.0),
-        ( 1.0, -1.0,  1.0),
-        ( 1.0,  1.0, -1.0),
-        ( 1.0,  1.0,  1.0),
-    ]
-
-    faces = [
-        (0, 1, 3, 2),
-        (4, 6, 7, 5),
-        (0, 4, 5, 1),
-        (2, 3, 7, 6),
-        (0, 2, 6, 4),
-        (1, 5, 7, 3),
-    ]
-
-    mesh = bpy.data.meshes.new(name + "_MESH")
-    mesh.from_pydata(verts, [], faces)
-    mesh.update()
-
-    cube = bpy.data.objects.new(name, mesh)
-
-    # Link to a visible collection
-    collection = obj.users_collection[0] if obj.users_collection else bpy.context.scene.collection
-    collection.objects.link(cube)
-
-    # Parent it to the target object so it follows transforms
-    cube.parent = obj
-    cube.matrix_parent_inverse.identity()
-
-    # Local transform relative to parent
-    cube.location = center
-    cube.scale = size * 0.5
-
-    # Display settings
-    cube.display_type = 'WIRE'
-    cube.hide_render = True
-    cube.hide_select = True
-    cube.hide_viewport = False
-    cube.show_in_front = True
-
-    return cube
-
-
-def get_cached_bbox(obj):
-    return obj.get("__seqbake_bbox_cache__", None)
-
-
-def set_cached_bbox(obj, min_v, max_v):
-    obj["__seqbake_bbox_cache__"] = {
-        "min": [min_v.x, min_v.y, min_v.z],
-        "max": [max_v.x, max_v.y, max_v.z],
-    }
-
-def remove_sculpt_bbox_helper():
-    obj = bpy.data.objects.get("__SEQBAKE_SCULPT_BBOX__")
-    if obj:
-        bpy.data.objects.remove(obj, do_unlink=True)
-
-
-def connect_sculpt_node(material, obj=None, props=None):
+def calculate_sculpt_bounds(obj):
     """
-    Temporarily reroute the material to output a sculpt map.
-
-    Supports:
-        connect_sculpt_node(material, obj, props)
-    and, for backward compatibility:
-        connect_sculpt_node(material, props)
+    Calculates stable sculpt normalization bounds from the evaluated mesh.
     """
 
-    # Backward-compatibility fallback:
-    # If called as connect_sculpt_node(material, props), obj is actually props.
-    if props is None:
-        props = obj
-        obj = bpy.context.active_object
-
-    if obj is None:
-        raise RuntimeError("connect_sculpt_node: target object is missing")
-
-    if props is None:
-        raise RuntimeError("connect_sculpt_node: props is missing")
-
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
-
-    TEMP_TAG = "__SEQBAKE_TEMP__"
-
-    # --- Find Material Output ---
-    output = next((n for n in nodes if n.type == 'OUTPUT_MATERIAL'), None)
-    if not output:
-        raise RuntimeError("Material Output not found for sculpt bake")
-
-    # --- Evaluated mesh ---
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    eval_obj = obj.evaluated_get(depsgraph)
-    mesh = eval_obj.data
+    obj_eval = obj.evaluated_get(depsgraph)
 
-    verts = [v.co for v in mesh.vertices]
-    if not verts:
-        raise RuntimeError("Sculpt bake mesh has no vertices")
+    mesh_data = None
 
-    min_v_live = Vector((
-        min(v.x for v in verts),
-        min(v.y for v in verts),
-        min(v.z for v in verts),
-    ))
+    try:
+        mesh_data = obj_eval.to_mesh()
 
-    max_v_live = Vector((
-        max(v.x for v in verts),
-        max(v.y for v in verts),
-        max(v.z for v in verts),
-    ))
+        if not mesh_data:
+            raise RuntimeError(f"Failed to evaluate mesh for object: {obj.name}")
 
-    # --- Resolve bounding mode ---
-    if props.sequenced_sculpt_bbox_dynamic:
-        bbox_min = min_v_live
-        bbox_max = max_v_live
-        set_cached_bbox(obj, bbox_min, bbox_max)
-    else:
-        cached = get_cached_bbox(obj)
-        if cached and "min" in cached and "max" in cached:
-            bbox_min = Vector(cached["min"])
-            bbox_max = Vector(cached["max"])
-        else:
-            bbox_min = min_v_live
-            bbox_max = max_v_live
-            set_cached_bbox(obj, bbox_min, bbox_max)
+        verts_co = np.array([v.co[:] for v in mesh_data.vertices])
 
-    bbox_scale = props.sequenced_sculpt_bbox_scale
+        max_abs = np.abs(verts_co).max(axis=0)
+        max_abs = np.where(max_abs == 0.0, 1.0, max_abs)
 
-    size_v = (bbox_max - bbox_min) * bbox_scale
+        return max_abs
 
-    # Prevent divide by zero
-    size_v.x = size_v.x if abs(size_v.x) > 1e-6 else 1e-6
-    size_v.y = size_v.y if abs(size_v.y) > 1e-6 else 1e-6
-    size_v.z = size_v.z if abs(size_v.z) > 1e-6 else 1e-6
-
-    # --- Helper cube ---
-    if props.sequenced_sculpt_show_bbox:
-        create_sculpt_bbox_helper(obj, bbox_min, bbox_max, bbox_scale)
-    else:
-        remove_sculpt_bbox_helper()
-
-    # --- Sculpt mapping baseline ---
-    base_offset_v = Vector((0.0, 0.0, bbox_min.z))
-    base_scale_v = Vector((2.0, 2.0, size_v.z))
-
-    # --- User offsets ---
-    user_offset_v = Vector((
-        props.sequenced_sculpt_offset_x,
-        props.sequenced_sculpt_offset_y,
-        props.sequenced_sculpt_offset_z,
-    ))
-
-    offset_v = base_offset_v + user_offset_v
-    scale_v = base_scale_v
-
-    # --- Clear existing Surface links ---
-    for link in list(output.inputs['Surface'].links):
-        links.remove(link)
-
-    # --- Nodes ---
-    geom = nodes.new(type='ShaderNodeNewGeometry')
-    geom.label = TEMP_TAG
-
-    sub = nodes.new(type='ShaderNodeVectorMath')
-    sub.operation = 'SUBTRACT'
-    sub.label = TEMP_TAG
-
-    div = nodes.new(type='ShaderNodeVectorMath')
-    div.operation = 'DIVIDE'
-    div.label = TEMP_TAG
-
-    add = nodes.new(type='ShaderNodeVectorMath')
-    add.operation = 'ADD'
-    add.label = TEMP_TAG
-
-    emission = nodes.new(type='ShaderNodeEmission')
-    emission.label = TEMP_TAG
-
-    # --- Constant nodes ---
-    offset_node = nodes.new(type='ShaderNodeCombineXYZ')
-    offset_node.label = TEMP_TAG
-    offset_node.inputs[0].default_value = offset_v.x
-    offset_node.inputs[1].default_value = offset_v.y
-    offset_node.inputs[2].default_value = offset_v.z
-
-    scale_node = nodes.new(type='ShaderNodeCombineXYZ')
-    scale_node.label = TEMP_TAG
-    scale_node.inputs[0].default_value = scale_v.x
-    scale_node.inputs[1].default_value = scale_v.y
-    scale_node.inputs[2].default_value = scale_v.z
-
-    half_node = nodes.new(type='ShaderNodeCombineXYZ')
-    half_node.label = TEMP_TAG
-    half_node.inputs[0].default_value = 0.5
-    half_node.inputs[1].default_value = 0.5
-    half_node.inputs[2].default_value = 0.0
-
-    # --- Wiring ---
-    links.new(geom.outputs['Position'], sub.inputs[0])
-    links.new(offset_node.outputs['Vector'], sub.inputs[1])
-
-    links.new(sub.outputs['Vector'], div.inputs[0])
-    links.new(scale_node.outputs['Vector'], div.inputs[1])
-
-    links.new(div.outputs['Vector'], add.inputs[0])
-    links.new(half_node.outputs['Vector'], add.inputs[1])
-
-    links.new(add.outputs['Vector'], emission.inputs['Color'])
-    emission.inputs['Strength'].default_value = 1.0
-
-    links.new(emission.outputs['Emission'], output.inputs['Surface'])
+    finally:
+        if mesh_data is not None:
+            obj_eval.to_mesh_clear()
 
 
-def reconnect_node(material):
+def bake_sculpt_direct_to_buffer(obj, image, normalization_bounds):
     """
-    Restore material after baking.
+    Bakes a sculpt-style vertex position map directly into an image buffer using UV-space sampling.
 
-    - Removes temporary nodes
-    - Restores BSDF → Output if available
-    - Fails gracefully if not
+    This function generates a "sculpt map" by projecting mesh geometry into UV space and
+    encoding interpolated vertex positions into an image. Each pixel corresponds to a UV
+    coordinate, and the mesh surface is evaluated using barycentric interpolation across
+    UV triangles.
+
+    The resulting image encodes normalized object-space vertex positions (XYZ → RGB),
+    commonly used for sculpt baking, procedural reconstruction, or displacement workflows.
+
+    Args:
+        obj (bpy.types.Object): The source mesh object to bake from.
+        image (bpy.types.Image): Target image buffer to write baked data into.
+        normalization_bounds: Sculpt normalization bounds from the evaluated mesh.
+
+    Raises:
+        RuntimeError: If mesh evaluation fails or the object has no active UV layer.
     """
 
+    # Dependency graph ensures we evaluate the *final* mesh state
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    obj_eval = obj.evaluated_get(depsgraph)
+
+    mesh_data = None
+    bm = None
+
+    try:
+        # Convert evaluated object into a mesh datablock
+        mesh_data = obj_eval.to_mesh()
+
+        if not mesh_data:
+            raise RuntimeError(f"Failed to evaluate mesh for object: {obj.name}")
+
+        # BMesh is used for fast topology + loop-level UV access
+        bm = bmesh.new()
+        bm.from_mesh(mesh_data)
+
+        # Active UV layer is required for UV-space rasterization
+        uv_layer = bm.loops.layers.uv.active
+        if uv_layer is None:
+            raise RuntimeError(f"Object '{obj.name}' has no active UV layer.")
+
+        width, height = image.size
+
+        # Initialize image buffer with neutral gray (0.5)
+        # Alpha is set to fully opaque
+        pixels = np.full((height, width, 4), 0.5, dtype=np.float32)
+        pixels[:, :, 3] = 1.0
+
+        # Pre-extract face UVs and vertex positions for faster sampling
+        face_data = []
+        for face in bm.faces:
+            loops = face.loops
+
+            uv_coords = [loop[uv_layer].uv.copy() for loop in loops]
+            vert_coords = [loop.vert.co.copy() for loop in loops]
+
+            face_data.append({
+                "uvs": uv_coords,
+                "verts": vert_coords,
+            })
+
+        # Iterate over each pixel in the output image
+        for py in range(height):
+            v = (py + 0.5) / height  # pixel center in UV space (V axis)
+
+            for px in range(width):
+                u = (px + 0.5) / width  # pixel center in UV space (U axis)
+
+                sample_uv = Vector((u, v))
+
+                first_barycentric_hit_position = None
+
+                # Search for which triangle in UV space contains this pixel
+                for face in face_data:
+
+                    uvs = face["uvs"]
+                    verts = face["verts"]
+
+                    if len(uvs) < 3:
+                        continue
+
+                    # Handle n-gons by triangulating from first vertex (fan method)
+                    for i in range(1, len(uvs) - 1):
+
+                        uv1 = uvs[0]
+                        uv2 = uvs[i]
+                        uv3 = uvs[i + 1]
+
+                        # Early reject degenerate UV triangles
+                        area = abs(
+                            (uv2.x - uv1.x) * (uv3.y - uv1.y) -
+                            (uv3.x - uv1.x) * (uv2.y - uv1.y)
+                        )
+
+                        if area < 1e-10:
+                            continue
+
+                        # Compute barycentric weights in UV space
+                        # This determines whether the pixel lies inside the triangle
+                        w1, w2, w3 = calculate_barycentric(
+                            u,
+                            v,
+                            uv1,
+                            uv2,
+                            uv3
+                        )
+
+                        # Reject if outside triangle
+                        if w1 < 0 or w2 < 0 or w3 < 0:
+                            continue
+
+                        # Interpolate corresponding 3D vertex positions
+                        p1 = verts[0]
+                        p2 = verts[i]
+                        p3 = verts[i + 1]
+
+                        first_barycentric_hit_position = (
+                            p1 * w1 +
+                            p2 * w2 +
+                            p3 * w3
+                        )
+
+                        break
+
+                    # Stop searching faces once a hit is found
+                    if first_barycentric_hit_position is not None:
+                        break
+
+                # Normalize 3D position into [0, 1] range for image encoding.
+                normalized = ((np.array(first_barycentric_hit_position[:]) / normalization_bounds) * 0.5) + 0.5
+
+                # Clamp and assign to pixel buffer (RGB = XYZ position)
+                r = float(np.clip(normalized[0], 0.0, 1.0))
+                g = float(np.clip(normalized[1], 0.0, 1.0))
+                b = float(np.clip(normalized[2], 0.0, 1.0))
+
+                pixels[py, px] = (r, g, b, 1.0)
+
+        # Write full pixel buffer into Blender image datablock
+        image.pixels.foreach_set(pixels.flatten())
+
+    except Exception as exc:
+        # Wrap any failure with contextual mesh/object information
+        raise RuntimeError(
+            f"Sculpt map bake failed for object '{obj.name}': {exc}"
+        ) from exc
+
+    finally:
+        # Ensure BMesh is freed to avoid memory leaks
+        if bm is not None:
+            bm.free()
+
+        # Clear evaluated mesh data from Blender
+        if mesh_data is not None:
+            obj_eval.to_mesh_clear()
+
+
+def calculate_barycentric(px, py, uv1, uv2, uv3):
+    """
+    Computes barycentric coordinates for a point within a UV triangle.
+
+    This is used to determine whether a UV pixel lies inside a triangle
+    and to interpolate vertex attributes (here: 3D positions).
+
+    Args:
+        px (float): U coordinate of sample point.
+        py (float): V coordinate of sample point.
+        uv1 (Vector): First triangle UV vertex.
+        uv2 (Vector): Second triangle UV vertex.
+        uv3 (Vector): Third triangle UV vertex.
+
+    Returns:
+        tuple: (w1, w2, w3) barycentric weights. If triangle is degenerate,
+               returns (-1, -1, -1).
+    """
+
+    # Determinant of triangle in UV space (twice signed area)
+    det = (uv2.y - uv3.y) * (uv1.x - uv3.x) + (uv3.x - uv2.x) * (uv1.y - uv3.y)
+
+    # Degenerate triangle check (zero area → invalid interpolation)
+    if det == 0:
+        return -1, -1, -1
+
+    # Compute barycentric weights for point (px, py)
+    w1 = ((uv2.y - uv3.y) * (px - uv3.x) + (uv3.x - uv2.x) * (py - uv3.y)) / det
+    w2 = ((uv3.y - uv1.y) * (px - uv3.x) + (uv1.x - uv3.x) * (py - uv3.y)) / det
+    w3 = 1 - w1 - w2  # ensures weights sum to 1
+
+    return w1, w2, w3
+
+
+def reconnect_node(material, temp_tag="__SEQBAKE_TEMP__"):
     nodes = material.node_tree.nodes
     links = material.node_tree.links
-
-    TEMP_TAG = "__SEQBAKE_TEMP__"
 
     bsdf = next((n for n in nodes if n.type == 'BSDF_PRINCIPLED'), None)
     output = next((n for n in nodes if n.type == 'OUTPUT_MATERIAL'), None)
 
     if not output:
-        print("[Sequenced Bake] WARNING: No Material Output node found.")
         return
 
-    # --- Remove only TEMP connections ---
     for link in list(output.inputs['Surface'].links):
-        if link.from_node.label == TEMP_TAG:
+        if link.from_node.label == temp_tag:
             links.remove(link)
 
-    # --- Restore BSDF if available ---
-    if bsdf:
-        # Only reconnect if nothing is connected
-        if not output.inputs['Surface'].is_linked:
-            links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
-    else:
-        print("[Sequenced Bake] WARNING: No Principled BSDF found, skipping reconnect.")
+    if bsdf and not output.inputs['Surface'].is_linked:
+        links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
 
-    # --- Cleanup temp nodes ---
     for node in list(nodes):
-        if node.label == TEMP_TAG:
+        if node.label in {temp_tag}:
             nodes.remove(node)
 
 
@@ -487,7 +462,7 @@ def create_image_texture(material, name, width, height, alpha, float_buffer, int
     return node, image
 
 
-def bake_frame(bake_type, props, frame, obj, mat, image_node, image, output_dir):
+def bake_frame(bake_type, props, frame, obj, mat, image_node, image, output_dir, sculpt_bounds=None,):
     """
     Bake a single frame for a specific bake pass and material.
 
@@ -504,6 +479,7 @@ def bake_frame(bake_type, props, frame, obj, mat, image_node, image, output_dir)
         image_node (bpy.types.Node): Active Image Texture node used for baking.
         image (bpy.types.Image): Image datablock receiving the baked result.
         output_dir (str): Directory where the baked image will be saved.
+        sculpt_bounds: defines the bounding box area of the sculpted object.
     """
 
     scene = bpy.context.scene
@@ -558,23 +534,36 @@ def bake_frame(bake_type, props, frame, obj, mat, image_node, image, output_dir)
         else ""
     )
 
-    bpy.ops.object.bake(
-        type=("EMIT" if bake_type in {"METALLIC", "OCCLUSION", "SCULPT"} else bake_type),
-        use_selected_to_active=props.sequenced_selected_to_active,
-        cage_extrusion=props.selected_to_active_extrusion,
-        max_ray_distance=props.selected_to_active_max_ray_distance,
-        cage_object=cage_name,
-    )
+    # Bake sculpt map rather than a shader.
+    if bake_type == "SCULPT":
+        scene.render.bake.use_clear = True
+        scene.render.bake.margin_type = 'EXTEND'
+        bake_sculpt_direct_to_buffer(obj, image, sculpt_bounds)
+        scene.render.image_settings.color_depth = '16'
 
-    if not props.sequence_use_float:
-        scene.render.image_settings.color_depth = '8'
+        if scene.render.image_settings.file_format == 'PNG':
+            scene.render.image_settings.compression = 0
 
-    filepath = os.path.join(
-        output_dir,
-        f"{frame}.{props.sequenced_bake_image_format}"
-    )
+        # Save the result
+        filepath = os.path.join(output_dir, f"{frame}.{props.sequenced_bake_image_format}")
+        image.save_render(filepath)
 
-    image.save_render(filepath)
+    else:
+        bpy.ops.object.bake(
+            type=("EMIT" if bake_type in {"METALLIC", "OCCLUSION"} else bake_type),
+            use_selected_to_active=props.sequenced_selected_to_active,
+            cage_extrusion=props.selected_to_active_extrusion,
+            max_ray_distance=props.selected_to_active_max_ray_distance,
+            cage_object=cage_name,
+        )
+
+        filepath = os.path.join(
+            output_dir,
+            f"{frame}.{props.sequenced_bake_image_format}"
+        )
+
+        image.save_render(filepath)
+
     mat.node_tree.nodes.remove(image_node)
 
     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
