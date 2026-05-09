@@ -72,6 +72,7 @@ Includes all major Cycles bake passes plus extended workflows:
 - Combined (configurable contributions)
 - Metallic *(custom node routing)*
 - ORM (Occlusion / Roughness / Metallic packed output)
+- Sculpt *(beta — UV -> Object-space position bake)*
 
 ---
 
@@ -92,10 +93,70 @@ Sequenced Bake dynamically modifies material node trees when required:
     - Alpha connections
     - Normal inputs
 
-- All temporary nodes are:
-  - Tagged using internal identifiers for safe cleanup
-  - Automatically removed after each bake pass
-  - Original node connections are fully restored
+---
+
+## Sculpt Bake (Beta in v1.1.6)
+
+The Sculpt Bake system generates a **normalized object-space position map** by projecting mesh geometry into UV space and encoding vertex positions into an image.
+
+This bake is designed for **stable, frame-consistent output** across animated sequences.
+
+## How It Works
+
+Mesh Density	Recommended Sculpt Map size in pixels.
+- Very low (≤10 tris) mesh -> 16×16 pixels
+- Low (10–100 tris) mesh -> 16×16 to 32x32 pixels
+- Medium (100–2k tris) mesh  -> 32×32 to 64x64 pixels
+- High (2k–10k tris) mesh -> 64×64 to 128x128 pixels
+- Very high (10k+) mesh -> 128×128 pixels (Secondlife Max Sculpt Resolution)
+
+Meshes can also have for example a 32x128 pixel sculpt map if the mesh is subdivided more along one axis vs another for long meshes or meshes like a railing or something like that.
+
+### 1. Evaluated Mesh Sampling
+- Uses Blender’s evaluated mesh (including modifiers and animation)
+- Converts mesh into a BMesh for efficient UV access
+
+### 2. UV-Space Projection
+Each pixel represents a UV coordinate:
+
+- The mesh is divided into triangles in UV space
+- Each pixel is tested against UV triangles
+- If the pixel lies inside a triangle:
+  - Barycentric coordinates are computed
+  - Vertex positions are interpolated
+
+### 3. Position Encoding
+- Interpolated 3D position is normalized using mesh bounds
+- Bounds are calculated once from the evaluated mesh
+- Prevents frame-to-frame scaling differences
+
+Final output:
+- **R = X**
+- **G = Y**
+- **B = Z**
+
+## Key Features
+
+- Frame-stable normalization (no per-frame drift)
+- UV-based rasterization for accurate surface mapping
+- Supports animated meshes and modifiers
+- Direct object-space position encoding
+- Fully compatible with sequenced baking workflows
+
+## Output
+
+- Image-based position map (RGB)
+- Values normalized to 0–1 range
+- Suitable for:
+  - Displacement reconstruction
+  - Procedural mesh workflows
+  - Animation baking pipelines
+
+## Limitations
+
+- Requires clean UVs for best results
+- Overlapping UVs may produce conflicts
+- Best performance with non-overlapping topology
 
 ---
 
