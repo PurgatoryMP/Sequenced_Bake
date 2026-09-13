@@ -593,7 +593,7 @@ class SequencedBakeProperties(PropertyGroup):
     )
     sequenced_bake_diffuse: bpy.props.BoolProperty(
         name="Diffuse",
-        description='Enable to bake the deffuse map for the selected objects active material',
+        description='Enable to bake the diffuse map for the selected objects active material',
         default=False
     )
     sequenced_bake_transmission: bpy.props.BoolProperty(
@@ -622,10 +622,9 @@ class SequencedBakeProperties(PropertyGroup):
     sequenced_bake_sculpt: bpy.props.BoolProperty(
         name="Sculpt (Beta)",
         description=(
-            "Bake object-space position data into a normalized sculpt map using a custom node setup. "
-            "This feature is experimental and currently works best with simple meshes that fully occupy "
-            "a square UV layout. More complex geometry, non-uniform UVs, or partial UV coverage may produce "
-            "inconsistent or clipped results. Behavior is still in development and subject to change."
+            "Bake an object-space position map for Second Life sculpted primitives. "
+            "Second Life sculpt maps are limited to 128x128 pixels and should use a square image. "
+            "The evaluated mesh is rasterized through its active UV map."
         ),
         default=False
     )
@@ -690,7 +689,7 @@ class SequencedBakeProperties(PropertyGroup):
         description="Include color lighting contributions in the bake",
         default=True
     )
-    combined_contribution_deffuse: bpy.props.BoolProperty(
+    combined_contribution_diffuse: bpy.props.BoolProperty(
         name="Diffuse",
         description="Include diffuse contributions in the bake",
         default=True

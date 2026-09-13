@@ -16,7 +16,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 1, 6),
+    "version": (1, 1, 7),
     "blender": (5, 0, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -33,18 +33,13 @@ from .sequenced_bake_core import (
 )
 from .sprite_sheet_creator import (
     SpriteSheetCreatorPanel,
-    # SpriteSheetCreatorNode,
-    # SpriteSheetCreatorSocket,
+    SpriteSheetCreatorNode,
+    SpriteSheetCreatorSocket,
     SpriteSheetCreatorVSEPanel,
     SpriteSheetProperties,
     OBJECT_OT_CreateSpriteSheet,
 )
-from bpy.types import (
-        Operator,
-        AddonPreferences,
-        Node,
-        NodeSocket,
-        )
+from bpy.types import AddonPreferences
 
 class SequencedBakeAddonProperties(AddonPreferences):
     bl_idname = __name__
@@ -76,12 +71,23 @@ class SequencedBakeAddonProperties(AddonPreferences):
         row.operator("wm.url_open", text="Discord Community").url = self.discord_url
         
 
+_node_menu_registered = False
+
+
 def add_custom_node_category():
-    if draw_custom_node_menu not in bpy.types.NODE_MT_add._dyn_ui_initialize():
+    """Add custom node entries to Blender's Add menu."""
+    global _node_menu_registered
+    if not _node_menu_registered:
         bpy.types.NODE_MT_add.append(draw_custom_node_menu)
+        _node_menu_registered = True
+
 
 def remove_custom_node_category():
-    bpy.types.NODE_MT_add.remove(draw_custom_node_menu)
+    """Remove custom node entries from Blender's Add menu."""
+    global _node_menu_registered
+    if _node_menu_registered:
+        bpy.types.NODE_MT_add.remove(draw_custom_node_menu)
+        _node_menu_registered = False
 
 def draw_custom_node_menu(self, context):
     layout = self.layout
@@ -102,8 +108,8 @@ classes = (
 
     # --- Sprite Sheet ---
     SpriteSheetProperties,
-    # SpriteSheetCreatorSocket,
-    # SpriteSheetCreatorNode,
+    SpriteSheetCreatorSocket,
+    SpriteSheetCreatorNode,
     OBJECT_OT_CreateSpriteSheet,
     SpriteSheetCreatorPanel,
     SpriteSheetCreatorVSEPanel,
@@ -126,11 +132,6 @@ def register():
         name="Sprite Sheet Props",
     )
 
-    bpy.types.ShaderNode.sequenced_bake_props = bpy.props.PointerProperty(
-        type=SequencedBakeProperties,
-        name="Sequenced Bake Node Props",
-    )
-
     add_custom_node_category()
 
 
@@ -142,9 +143,6 @@ def unregister():
 
     if hasattr(bpy.types.Scene, "sequenced_bake_props"):
         del bpy.types.Scene.sequenced_bake_props
-
-    if hasattr(bpy.types.ShaderNode, "sequenced_bake_props"):
-        del bpy.types.ShaderNode.sequenced_bake_props
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

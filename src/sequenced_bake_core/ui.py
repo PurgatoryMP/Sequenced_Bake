@@ -142,7 +142,7 @@ class SequencedBakeSocket(NodeSocket):
         return (0.8, 0.8, 0.2, 1.0)  # Yellow
 
 
-def draw_sequenced_bake_ui(layout, props):
+def draw_sequenced_bake_ui(layout, props, source_node=None):
     """
     Draws the full Sequenced Bake UI for panels or nodes using boxed sections.
 
@@ -363,11 +363,17 @@ def draw_sequenced_bake_ui(layout, props):
 
         col.separator(factor=1.0)
 
-        col.operator(
+        bake_op = col.operator(
             "sequenced_bake.bake",
             text="Bake Material Sequence",
-            icon='RENDER_STILL'
+            icon='RENDER_STILL',
         )
+        if source_node is not None:
+            # Node.id_data is the owning ID (for a material shader tree this
+            # is the Material), so pass its name to the operator. The operator
+            # resolves the actual node tree from that owner.
+            bake_op.node_tree_name = source_node.id_data.name
+            bake_op.node_name = source_node.name
 
         col.separator()
 
@@ -450,18 +456,16 @@ class SequencedBakeNode(Node):
     bl_description = "Bake a material sequence based on the defined settings and keyframed node settings."
     bl_icon = "NODE"
 
+    bake_props: bpy.props.PointerProperty(type=SequencedBakeProperties)
+
     def init(self, context):
         self.width = 300
 
     def draw_buttons(self, context, layout):
-        scene = context.scene
-        if not hasattr(scene, "sequenced_bake_props"):
-            layout.label(text="Sequenced Bake not initialized")
-            return
-        draw_sequenced_bake_ui(layout, scene.sequenced_bake_props)
+        draw_sequenced_bake_ui(layout, self.bake_props, self)
 
     def draw_buttons_ext(self, context, layout):
-        layout.label(text="Extended Settings")
+        draw_sequenced_bake_ui(layout, self.bake_props, self)
 
     def draw_label(self):
         return "Sequenced Bake"
