@@ -620,13 +620,14 @@ class SequencedBakeProperties(PropertyGroup):
         default=False
     )
     sequenced_bake_sculpt: bpy.props.BoolProperty(
-        name="Sculpt (Beta)",
-        description=(
-            "Bake an object-space position map for Second Life sculpted primitives. "
-            "Second Life sculpt maps are limited to 128x128 pixels and should use a square image. "
-            "The evaluated mesh is rasterized through its active UV map."
-        ),
+        name="Sculpt Map",
+        description="Enable to bake a Second Life-compatible sculpt map for the active mesh object",
         default=False
+    )
+    sequenced_bake_sculpt_bounds_object: bpy.props.PointerProperty(
+        name="Bounding Object",
+        description="Optional reference object (e.g., a cube) to use as a stable bounding box across animation frames",
+        type=bpy.types.Object
     )
     # Lighting options.
     diffuse_lighting_direct: bpy.props.BoolProperty(

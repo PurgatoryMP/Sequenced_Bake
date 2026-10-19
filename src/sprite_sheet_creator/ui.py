@@ -1,24 +1,23 @@
-# This file is part of Sequence Bake.
-#
-# Sequence Bake is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# Sequence Bake is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+"""
+    This file is part of Sequence Bake.
+
+    Sequence Bake is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or any later version.
+
+    Sequence Bake is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+
+"""
 
 import bpy
 from bpy.types import Panel, Node, NodeSocket
 
-
-# ------------------------------------------------------------------------
-# Node Socket
-# ------------------------------------------------------------------------
 
 class SpriteSheetCreatorSocket(NodeSocket):
     bl_idname = "SpriteSheetCreatorSocket"
@@ -30,10 +29,6 @@ class SpriteSheetCreatorSocket(NodeSocket):
     def draw_color(self, context, node):
         return (0.8, 0.8, 0.2, 1.0)
 
-
-# ------------------------------------------------------------------------
-# Node
-# ------------------------------------------------------------------------
 
 class SpriteSheetCreatorNode(Node):
     bl_idname = "ShaderNodeSpriteSheetCreatorNode"
@@ -47,10 +42,7 @@ class SpriteSheetCreatorNode(Node):
     def draw_buttons(self, context, layout):
         self._draw_sprite_sheet_ui(context, layout)
 
-    # ------------------------------------------------------------------
     # Shared UI Drawer
-    # ------------------------------------------------------------------
-
     def _draw_sprite_sheet_ui(self, context, layout):
         """
         Draws the full Sprite Sheet Creator UI using boxed sections.
@@ -69,9 +61,7 @@ class SpriteSheetCreatorNode(Node):
         scene = context.scene
         props = scene.sprite_sheet_props
 
-        # -----------------------------
         # Source Section
-        # -----------------------------
         box = layout.box()
         col = box.column(align=True)
         col.label(text="Source:")
@@ -94,9 +84,7 @@ class SpriteSheetCreatorNode(Node):
             if not props.use_all_vse_channels:
                 col.prop(props, "vse_channel")
 
-        # -----------------------------
         # Layout Section
-        # -----------------------------
         box = layout.box()
         col = box.column(align=True)
         col.label(text="Sprite Sheet Properties:")
@@ -108,9 +96,7 @@ class SpriteSheetCreatorNode(Node):
         col.prop(props, "end_frame")
         col.prop(props, "is_reversed")
 
-        # -----------------------------
         # Output Section
-        # -----------------------------
         box = layout.box()
         col = box.column(align=True)
         col.label(text="Output File Name:")
@@ -128,9 +114,7 @@ class SpriteSheetCreatorNode(Node):
 
         col.prop(props, "file_overwrite")
 
-        # -----------------------------
         # Options Section
-        # -----------------------------
         box = layout.box()
         col = box.column(align=True)
         col.prop(props, "sprite_sheet_is_alpha")
@@ -138,19 +122,12 @@ class SpriteSheetCreatorNode(Node):
         col.prop(props, "open_output_directory")
         col.prop(props, "clear_generated_images")
 
-        # -----------------------------
         # Execute Section
-        # -----------------------------
         box = layout.box()
         col = box.column(align=True)
         col.operator("object.create_sprite_sheet", text="Generate Sprite Sheet")
 
-
-
-# ------------------------------------------------------------------------
 # Viewport Panel
-# ------------------------------------------------------------------------
-
 class SpriteSheetCreatorPanel(Panel):
     bl_label = "Sprite Sheet Creator"
     bl_idname = "VIEW3D_PT_Sprite_Sheet_Creator"
@@ -161,11 +138,7 @@ class SpriteSheetCreatorPanel(Panel):
     def draw(self, context):
         SpriteSheetCreatorNode._draw_sprite_sheet_ui(self, context, self.layout)
 
-
-# ------------------------------------------------------------------------
 # VSE Panel
-# ------------------------------------------------------------------------
-
 class SpriteSheetCreatorVSEPanel(Panel):
     bl_label = "Sprite Sheet Creator"
     bl_idname = "VSE_PT_Sprite_Sheet_Creator"

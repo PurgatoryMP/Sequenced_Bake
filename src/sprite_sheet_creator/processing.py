@@ -1,7 +1,24 @@
-"""Processing helpers for Sprite Sheet Creator."""
+"""
+    This file is part of Sequence Bake.
+
+    Sequence Bake is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or any later version.
+
+    Sequence Bake is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+
+"""
+
 
 import os
 import platform
+import re
 import subprocess
 
 import bpy
@@ -77,12 +94,30 @@ def _show_image_in_editor(image):
     return False
 
 
+def _natural_sort_key(filename, case_sensitive=False):
+    """Build a filename sort key that keeps numeric sequence values numeric.
+
+    For example, ``frame_2.png`` sorts before ``frame_10.png`` rather than
+    after it, while non-numeric portions continue to sort alphabetically.
+
+    Args:
+        filename: Filename to convert into a sortable key.
+        case_sensitive: Preserve case when sorting non-numeric text.
+
+    Returns:
+        A tuple containing text and integer components suitable for sorting.
+    """
+    name = filename if case_sensitive else filename.lower()
+    parts = re.split(r"(\d+)", name)
+    return tuple(int(part) if part.isdigit() else part for part in parts)
+
+
 def load_directory_images(
-    directory,
-    start_frame=None,
-    end_frame=None,
-    reversed_order=False,
-    report_fn=None,
+        directory,
+        start_frame=None,
+        end_frame=None,
+        reversed_order=False,
+        report_fn=None,
 ):
     """Load image files from a directory in the configured order."""
     images = []
@@ -117,14 +152,26 @@ def load_directory_images(
             return images
 
         props = getattr(bpy.context.scene, "sprite_sheet_props", None)
-        if props and props.use_alphabetical_sort:
-            key = None if props.alphabetical_case_sensitive else str.lower
+
+        # Use_alphabetical_sort is enabled in the properties before sorting.
+        # This ensures the user's UI selection dictates whether natural sort is applied.
+        use_alpha_sort = getattr(props, "use_alphabetical_sort", True) if props else True
+        case_sensitive = bool(props and props.alphabetical_case_sensitive)
+
+        if use_alpha_sort:
             image_files.sort(
-                key=key,
-                reverse=props.alphabetical_reverse,
+                key=lambda filename: _natural_sort_key(
+                    filename,
+                    case_sensitive=case_sensitive,
+                ),
+                reverse=bool(props and props.alphabetical_reverse),
             )
         else:
-            image_files.sort(reverse=reversed_order)
+            # Fallback to standard lexicographical sort if natural sort is disabled
+            image_files.sort(reverse=bool(props and props.alphabetical_reverse))
+
+        # Reverse Order is a separate sequence operation and is applied only
+        # after the requested frame range has been selected below.
 
         total_images = len(image_files)
         start_index = max(0, (start_frame - 1) if start_frame else 0)
@@ -139,8 +186,15 @@ def load_directory_images(
             return images
 
         image_files = image_files[start_index:end_index]
+
+        # Apply the final range reversal if requested by the user
         if reversed_order:
             image_files.reverse()
+
+        print(
+            "[Sprite Sheet Creator] Frame order: "
+            + ", ".join(image_files)
+        )
 
         for filename in image_files:
             path = os.path.join(directory, filename)

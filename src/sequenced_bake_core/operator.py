@@ -1,13 +1,29 @@
-"""Modal operator for Sequenced Bake."""
+"""
+    This file is part of Sequence Bake.
+
+    Sequence Bake is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or any later version.
+
+    Sequence Bake is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+
+"""
 
 import os
 import time
 
 import bpy
+import bmesh
+import numpy as np
 
 from .processing import (
     bake_frame,
-    calculate_sculpt_bounds,
     clear_generated_textures,
     connect_metallic_node,
     connect_occlusion_node,
@@ -50,11 +66,6 @@ class SequencedBakeOperator(bpy.types.Operator):
             node = None
             node_tree = None
 
-            # A Shader Node's ``id_data`` is the owning ID (normally the
-            # Material), not necessarily the NodeTree itself.  The previous
-            # implementation incorrectly assumed ``node_tree_name`` referred
-            # to bpy.data.node_groups, which caused material shader nodes to
-            # be reported as unresolved.
             if self.node_tree_name:
                 material = bpy.data.materials.get(self.node_tree_name)
                 if material and material.use_nodes and material.node_tree:
@@ -65,8 +76,6 @@ class SequencedBakeOperator(bpy.types.Operator):
             if node_tree:
                 node = node_tree.nodes.get(self.node_name)
 
-            # Prefer the actual node-editor tree as a final fallback. This
-            # also supports node trees whose owner is not a Material.
             if node is None:
                 space = getattr(context, "space_data", None)
                 context_tree = getattr(space, "edit_tree", None) if space else None
@@ -87,7 +96,6 @@ class SequencedBakeOperator(bpy.types.Operator):
         self._scene = context.scene
         self._generated_images = []
         self._output_dirs = {}
-        self._sculpt_normalization_bounds = None
         self._active_material_state = None
         self._active_material = None
         self._active_image_node = None
@@ -103,33 +111,6 @@ class SequencedBakeOperator(bpy.types.Operator):
 
         scene = self._scene
         props = self._props
-
-        if scene.render.engine != "CYCLES":
-            self.report({"WARNING"}, "Sequenced Bake requires Cycles render engine")
-            return {"CANCELLED"}
-
-        if not props.sequenced_bake_output_path:
-            self.report({"ERROR"}, "No output path specified")
-            return {"CANCELLED"}
-
-        if not self._obj or self._obj.type != "MESH":
-            self.report({"ERROR"}, "Active mesh object required")
-            return {"CANCELLED"}
-
-        if not self._obj.active_material:
-            self.report({"ERROR"}, "Active object with material required")
-            return {"CANCELLED"}
-
-        if props.material_mode == "ALL":
-            self._materials = [
-                slot.material for slot in self._obj.material_slots if slot.material
-            ]
-        else:
-            self._materials = [self._obj.active_material]
-
-        if not self._materials:
-            self.report({"ERROR"}, "No materials found")
-            return {"CANCELLED"}
 
         self._bake_map = {
             "NORMAL": props.sequenced_bake_normal,
@@ -149,39 +130,42 @@ class SequencedBakeOperator(bpy.types.Operator):
             "SCULPT": props.sequenced_bake_sculpt,
         }
 
+        if scene.render.engine != "CYCLES":
+            self.report({"WARNING"}, "Sequenced Bake requires Cycles render engine for material passes")
+            return {"CANCELLED"}
+
+        if not props.sequenced_bake_output_path:
+            self.report({"ERROR"}, "No output path specified")
+            return {"CANCELLED"}
+
+        if not self._obj or self._obj.type != "MESH":
+            self.report({"ERROR"}, "Active mesh object required")
+            return {"CANCELLED"}
+
+        if not self._obj.active_material:
+            self.report({"ERROR"}, "Active object with material required")
+            return {"CANCELLED"}
+
+        if props.material_mode == "ALL":
+            self._materials = [
+                slot.material for slot in self._obj.material_slots if slot.material
+            ]
+        else:
+            self._materials = [self._obj.active_material] if self._obj.active_material else []
+
+        if not self._materials:
+            self.report({"ERROR"}, "No materials found")
+            return {"CANCELLED"}
+
         if not any(self._bake_map.values()):
             self.report({"WARNING"}, "No bake types are enabled")
             return {"CANCELLED"}
-
-        if props.sequenced_bake_sculpt:
-            if props.sequenced_bake_width > 128 or props.sequenced_bake_height > 128:
-                self.report(
-                    {"ERROR"},
-                    "Second Life sculpt maps cannot exceed 128x128 pixels.",
-                )
-                return {"CANCELLED"}
-            if props.sequenced_bake_width != props.sequenced_bake_height:
-                self.report({"ERROR"}, "Second Life sculpt maps must be square.")
-                return {"CANCELLED"}
-            if props.sequenced_bake_image_format not in {"PNG", "TGA"}:
-                self.report(
-                    {"ERROR"},
-                    "Second Life sculpt maps should be saved as lossless PNG or TGA images.",
-                )
-                return {"CANCELLED"}
 
         if props.frame_mode == "CURRENT":
             self._frames = [scene.frame_current]
         else:
             step = max(1, props.frame_step)
             self._frames = list(range(scene.frame_start, scene.frame_end + 1, step))
-
-        if self._bake_map.get("SCULPT"):
-            bounds_frame = scene.frame_start if props.frame_mode == "SEQUENCE" else scene.frame_current
-            current_frame = scene.frame_current
-            scene.frame_set(bounds_frame)
-            self._sculpt_normalization_bounds = calculate_sculpt_bounds(self._obj)
-            scene.frame_set(current_frame)
 
         self._build_tasks()
         if not self._tasks:
@@ -203,11 +187,12 @@ class SequencedBakeOperator(bpy.types.Operator):
             for bake_type, enabled in self._bake_map.items():
                 if not enabled:
                     continue
+                mat_name = material.name if material else "NoMaterial"
                 output_dir = os.path.join(
                     root,
-                    f"{self._obj.name}_{material.name}_{bake_type}",
+                    f"{self._obj.name}_{mat_name}_{bake_type}",
                 )
-                self._output_dirs[(material.name, bake_type)] = output_dir
+                self._output_dirs[(mat_name, bake_type)] = output_dir
                 self._tasks.extend(
                     (material, bake_type, frame)
                     for frame in self._frames
@@ -244,7 +229,7 @@ class SequencedBakeOperator(bpy.types.Operator):
         self._task_index += 1
         task_start = time.perf_counter()
 
-        self._props.bake_current_material = material.name
+        self._props.bake_current_material = material.name if material else "None"
         self._props.bake_current_type = bake_type
         self._props.bake_frame_info = f"{frame} / {len(self._frames)}"
         self._props.bake_status = "Baking"
@@ -256,20 +241,24 @@ class SequencedBakeOperator(bpy.types.Operator):
         material_state = None
 
         try:
-            if bake_type == "METALLIC":
-                material_state = connect_metallic_node(material)
-            elif bake_type == "OCCLUSION":
-                material_state = connect_occlusion_node(material)
+            if material:
+                if bake_type == "METALLIC":
+                    material_state = connect_metallic_node(material)
+                elif bake_type == "OCCLUSION":
+                    material_state = connect_occlusion_node(material)
 
             colorspace = self._props.colorspace
             if bake_type in {"NORMAL", "ROUGHNESS", "METALLIC", "OCCLUSION"}:
                 colorspace = "Non-Color"
 
+            width = self._props.sequenced_bake_width
+            height = self._props.sequenced_bake_height
+
             image_node, image = create_image_texture(
                 material=material,
-                name=f"{self._obj.name}_{material.name}_{bake_type}_{frame}",
-                width=self._props.sequenced_bake_width,
-                height=self._props.sequenced_bake_height,
+                name=f"{self._obj.name}_{material.name if material else 'NoMat'}_{bake_type}_{frame}",
+                width=width,
+                height=height,
                 alpha=self._props.sequence_is_alpha,
                 float_buffer=self._props.sequence_use_float,
                 interpolation=self._props.interpolation,
@@ -284,7 +273,8 @@ class SequencedBakeOperator(bpy.types.Operator):
             self._active_image_node = image_node
             self._active_image = image
 
-            output_dir = self._output_dirs[(material.name, bake_type)]
+            mat_name = material.name if material else "NoMaterial"
+            output_dir = self._output_dirs[(mat_name, bake_type)]
             os.makedirs(output_dir, exist_ok=True)
 
             bake_frame(
@@ -296,17 +286,16 @@ class SequencedBakeOperator(bpy.types.Operator):
                 image_node=image_node,
                 image=image,
                 output_dir=output_dir,
-                sculpt_bounds=self._sculpt_normalization_bounds,
             )
         finally:
-            if image_node is not None:
+            if image_node is not None and material and material.node_tree:
                 try:
                     if image_node.name in material.node_tree.nodes:
                         material.node_tree.nodes.remove(image_node)
                 except (ReferenceError, RuntimeError) as exc:
                     print(f"[Sequenced Bake] Failed to remove temporary image node: {exc}")
 
-            if material_state is not None:
+            if material_state is not None and material:
                 try:
                     restore_material_state(material, material_state)
                 except Exception as exc:

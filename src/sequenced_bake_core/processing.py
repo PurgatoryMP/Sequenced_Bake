@@ -1,10 +1,39 @@
-"""Processing helpers for Sequenced Bake."""
+"""
+    This file is part of Sequence Bake.
+
+    Sequence Bake is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or any later version.
+
+    Sequence Bake is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+
+"""
 
 import os
 
 import bpy
 import numpy as np
+import mathutils
 
+try:
+    from .sculpt_map import (
+        bake_sculpt_direct_to_buffer,
+        calculate_sculpt_bounds,
+        get_sculpt_mesh_dimensions,
+    )
+except ImportError:
+    # Supports running this module directly during development.
+    from sculpt_map import (
+        bake_sculpt_direct_to_buffer,
+        calculate_sculpt_bounds,
+        get_sculpt_mesh_dimensions,
+    )
 
 TEMP_NODE_TAG = "__SEQBAKE_TEMP__"
 
@@ -220,210 +249,6 @@ def reconnect_node(material, state=None, temp_tag=TEMP_NODE_TAG):
             nodes.remove(node)
 
 
-def calculate_sculpt_bounds(obj):
-    """Calculate symmetric object-space bounds for sculpt-map encoding.
-
-    The bounds are based on the evaluated mesh so modifiers are represented.
-    Each axis is guaranteed to have a non-zero normalization divisor.
-
-    Args:
-        obj: Mesh object to evaluate.
-
-    Returns:
-        numpy.ndarray: Three positive axis extents.
-    """
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    obj_eval = obj.evaluated_get(depsgraph)
-    mesh_data = None
-
-    try:
-        mesh_data = obj_eval.to_mesh()
-        if mesh_data is None or not mesh_data.vertices:
-            raise RuntimeError(f"Failed to evaluate mesh for object: {obj.name}")
-
-        coords = np.empty((len(mesh_data.vertices), 3), dtype=np.float32)
-        mesh_data.vertices.foreach_get("co", coords.ravel())
-        max_abs = np.max(np.abs(coords), axis=0)
-        return np.where(max_abs == 0.0, 1.0, max_abs).astype(np.float32)
-    finally:
-        if mesh_data is not None:
-            obj_eval.to_mesh_clear()
-
-
-def _unwrap_uv_triangle(uvs):
-    """Return a UV triangle adjusted across 0/1 seams when necessary."""
-    result = np.asarray(uvs, dtype=np.float32).copy()
-    base = result[0].copy()
-
-    for index in (1, 2):
-        delta = result[index] - base
-        result[index] -= np.round(delta)
-
-    return result
-
-
-def _rasterize_sculpt_triangle(pixels, width, height, uv_triangle, positions, bounds):
-    """Rasterize one UV triangle into the sculpt-map pixel buffer."""
-    uv = _unwrap_uv_triangle(uv_triangle)
-    uv1, uv2, uv3 = uv
-    det = (
-        (uv2[1] - uv3[1]) * (uv1[0] - uv3[0]) +
-        (uv3[0] - uv2[0]) * (uv1[1] - uv3[1])
-    )
-    if abs(det) < 1e-12:
-        return
-
-    # A UV island can cross the 0/1 seam. Rasterize the triangle in each
-    # neighboring UV tile that overlaps the output image.
-    for shift_u in (-1.0, 0.0, 1.0):
-        for shift_v in (-1.0, 0.0, 1.0):
-            shifted = uv + np.array((shift_u, shift_v), dtype=np.float32)
-            min_u, min_v = np.min(shifted, axis=0)
-            max_u, max_v = np.max(shifted, axis=0)
-
-            if max_u < 0.0 or min_u > 1.0 or max_v < 0.0 or min_v > 1.0:
-                continue
-
-            x0 = max(0, int(np.floor(min_u * width - 0.5)))
-            x1 = min(width - 1, int(np.ceil(max_u * width - 0.5)))
-            y0 = max(0, int(np.floor(min_v * height - 0.5)))
-            y1 = min(height - 1, int(np.ceil(max_v * height - 0.5)))
-
-            if x1 < x0 or y1 < y0:
-                continue
-
-            uv_a, uv_b, uv_c = shifted
-            xs = (np.arange(x0, x1 + 1, dtype=np.float32) + 0.5) / width
-            ys = (np.arange(y0, y1 + 1, dtype=np.float32) + 0.5) / height
-            grid_x, grid_y = np.meshgrid(xs, ys)
-
-            w1 = (
-                (uv_b[1] - uv_c[1]) * (grid_x - uv_c[0]) +
-                (uv_c[0] - uv_b[0]) * (grid_y - uv_c[1])
-            ) / det
-            w2 = (
-                (uv_c[1] - uv_a[1]) * (grid_x - uv_c[0]) +
-                (uv_a[0] - uv_c[0]) * (grid_y - uv_c[1])
-            ) / det
-            w3 = 1.0 - w1 - w2
-
-            mask = (w1 >= -1e-6) & (w2 >= -1e-6) & (w3 >= -1e-6)
-            if not np.any(mask):
-                continue
-
-            position = (
-                w1[..., None] * positions[0] +
-                w2[..., None] * positions[1] +
-                w3[..., None] * positions[2]
-            )
-            normalized = np.clip((position / bounds) * 0.5 + 0.5, 0.0, 1.0)
-
-            target = pixels[y0:y1 + 1, x0:x1 + 1, :3]
-            target[mask] = normalized[mask]
-
-
-def bake_sculpt_direct_to_buffer(obj, image, normalization_bounds):
-    """Generate a Second Life-compatible sculpt map directly in memory.
-
-    Sculpt maps are position maps: RGB encodes object-space X, Y, and Z.
-    The implementation rasterizes evaluated mesh loop triangles into UV space
-    using NumPy instead of testing every pixel against every polygon.
-
-    Second Life's sculpted-prim system uses a maximum practical sculpt-map
-    texture size of 128x128. The caller therefore must provide a square image
-    no larger than 128x128.
-
-    Args:
-        obj: Mesh object used to generate the map.
-        image: Target Blender image.
-        normalization_bounds: Symmetric XYZ normalization extents.
-
-    Raises:
-        RuntimeError: If the mesh, UV map, image dimensions, or evaluated data
-            are invalid.
-    """
-    width, height = image.size
-    if width > 128 or height > 128:
-        raise RuntimeError(
-            f"Second Life sculpt maps must be no larger than 128x128; received {width}x{height}."
-        )
-    if width != height:
-        raise RuntimeError(
-            f"Second Life sculpt maps should be square; received {width}x{height}."
-        )
-    if obj.type != "MESH":
-        raise RuntimeError(f"Sculpt maps require a mesh object; '{obj.name}' is {obj.type}.")
-
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    obj_eval = obj.evaluated_get(depsgraph)
-    mesh_data = None
-
-    try:
-        mesh_data = obj_eval.to_mesh()
-        if mesh_data is None:
-            raise RuntimeError(f"Failed to evaluate mesh for object: {obj.name}")
-
-        if not mesh_data.uv_layers.active:
-            raise RuntimeError(f"Object '{obj.name}' has no active UV layer.")
-
-        mesh_data.calc_loop_triangles()
-        uv_layer = mesh_data.uv_layers.active
-
-        vertices = np.empty((len(mesh_data.vertices), 3), dtype=np.float32)
-        mesh_data.vertices.foreach_get("co", vertices.ravel())
-
-        uv_data = np.empty((len(mesh_data.loops), 2), dtype=np.float32)
-        uv_layer.data.foreach_get("uv", uv_data.ravel())
-
-        pixels = np.empty((height, width, 4), dtype=np.float32)
-        pixels[:, :, :3] = 0.5
-        pixels[:, :, 3] = 1.0
-
-        for triangle in mesh_data.loop_triangles:
-            loop_indices = triangle.loops
-            uv_triangle = uv_data[list(loop_indices)]
-            vertex_indices = triangle.vertices
-            positions = vertices[list(vertex_indices)]
-            _rasterize_sculpt_triangle(
-                pixels,
-                width,
-                height,
-                uv_triangle,
-                positions,
-                np.asarray(normalization_bounds, dtype=np.float32),
-            )
-
-        image.pixels.foreach_set(pixels.ravel())
-        image.update()
-
-    except Exception as exc:
-        raise RuntimeError(
-            f"Sculpt map bake failed for object '{obj.name}': {exc}"
-        ) from exc
-    finally:
-        if mesh_data is not None:
-            obj_eval.to_mesh_clear()
-
-
-def calculate_barycentric(px, py, uv1, uv2, uv3):
-    """Compute barycentric coordinates for a UV-space point."""
-    det = (
-        (uv2.y - uv3.y) * (uv1.x - uv3.x) +
-        (uv3.x - uv2.x) * (uv1.y - uv3.y)
-    )
-    if abs(det) < 1e-12:
-        return -1.0, -1.0, -1.0
-
-    w1 = (
-        (uv2.y - uv3.y) * (px - uv3.x) +
-        (uv3.x - uv2.x) * (py - uv3.y)
-    ) / det
-    w2 = (
-        (uv3.y - uv1.y) * (px - uv3.x) +
-        (uv1.x - uv3.x) * (py - uv3.y)
-    ) / det
-    return w1, w2, 1.0 - w1 - w2
-
 
 def create_image_texture(
     material,
@@ -571,17 +396,11 @@ def bake_frame(
 
     try:
         if bake_type == "SCULPT":
+            bounds_obj = props.sequenced_bake_sculpt_bounds_object
             if sculpt_bounds is None:
-                raise RuntimeError("Sculpt normalization bounds were not calculated.")
-            if image.size[0] > 128 or image.size[1] > 128:
-                raise RuntimeError(
-                    f"Second Life sculpt maps are limited to 128x128; "
-                    f"requested {image.size[0]}x{image.size[1]}."
-                )
-            if image.size[0] != image.size[1]:
-                raise RuntimeError("Second Life sculpt maps must use a square image.")
+                sculpt_bounds = calculate_sculpt_bounds(obj, bounds_obj=bounds_obj)
 
-            bake_sculpt_direct_to_buffer(obj, image, sculpt_bounds)
+            bake_sculpt_direct_to_buffer(obj, image, sculpt_bounds, bounds_obj=bounds_obj)
             filepath = _save_image(
                 image,
                 output_dir,
@@ -609,8 +428,9 @@ def bake_frame(
         print(f"[Sequenced Bake] Saved {bake_type} frame {frame}: {filepath}")
         return filepath
     except Exception as exc:
+        mat_name = mat.name if mat else "None"
         print(
-            f"[Sequenced Bake] Bake failed - material='{mat.name}', "
+            f"[Sequenced Bake] Bake failed - material='{mat_name}', "
             f"type='{bake_type}', frame={frame}: {exc}"
         )
         raise

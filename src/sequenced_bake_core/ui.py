@@ -309,8 +309,12 @@ def draw_sequenced_bake_ui(layout, props, source_node=None):
         col.prop(props, "sequenced_bake_metallic")
 
         col.prop(props, "sequenced_bake_occlusion")
-
+        
         col.prop(props, "sequenced_bake_sculpt")
+        if props.sequenced_bake_sculpt:
+            row = col.row()
+            row.separator(factor=option_padding)
+            row.prop(props, "sequenced_bake_sculpt_bounds_object")
 
     # Color Management
     box = layout.box()
@@ -369,9 +373,6 @@ def draw_sequenced_bake_ui(layout, props, source_node=None):
             icon='RENDER_STILL',
         )
         if source_node is not None:
-            # Node.id_data is the owning ID (for a material shader tree this
-            # is the Material), so pass its name to the operator. The operator
-            # resolves the actual node tree from that owner.
             bake_op.node_tree_name = source_node.id_data.name
             bake_op.node_name = source_node.name
 
@@ -409,18 +410,6 @@ def draw_sequenced_bake_ui(layout, props, source_node=None):
 class SequencedBakePanel(Panel):
     """
     UI Panel for the Sequenced Bake add-on.
-
-    Displays the Sequenced Bake settings in the 3D View's UI
-    sidebar. Uses the draw_sequenced_bake_ui helper to render
-    the full configuration interface.
-
-    Class Attributes:
-        bl_label (str): Panel label shown in Blender.
-        bl_idname (str): Blender identifier for the panel.
-        bl_space_type (str): Space type where the panel is displayed.
-        bl_region_type (str): Region type (sidebar).
-        bl_description (str): Tooltip description of the panel.
-        bl_category (str): Sidebar tab name.
     """
     bl_label = "Sequenced Bake"
     bl_idname = "VIEW3D_PT_sequenced_bake"
@@ -440,16 +429,6 @@ class SequencedBakePanel(Panel):
 class SequencedBakeNode(Node):
     """
     Custom Shader Node for Sequenced Bake.
-
-    Provides a node-based interface in the Shader Editor for controlling
-    material baking sequences. Mirrors the settings available in the
-    UI panel.
-
-    Class Attributes:
-        bl_idname (str): Blender identifier for the node type.
-        bl_label (str): Node label displayed in the editor.
-        bl_description (str): Tooltip description.
-        bl_icon (str): Node icon in the editor.
     """
     bl_idname = "ShaderNodeSequencedBake"
     bl_label = "Sequenced Bake"

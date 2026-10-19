@@ -1,22 +1,25 @@
-# This file is part of Sequence Bake.
-# 
-# Sequence Bake is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or any later version.
-# 
-# Sequence Bake is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-# 
-# You should have received a copy of the GNU General Public License
-# along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+"""
+    This file is part of Sequence Bake.
+
+    Sequence Bake is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or any later version.
+
+    Sequence Bake is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
+
+"""
 
 
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 1, 7),
+    "version": (1, 1, 8),
     "blender": (5, 0, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -30,6 +33,9 @@ from .sequenced_bake_core import (
     SequencedBakeNode,
     SequencedBakeSocket,
     SequencedBakeOperator,
+    MESH_OT_add_sculpt_mesh,
+    VIEW3D_MT_mesh_sculpties_add,
+    menu_func_add_sculpties,
 )
 from .sprite_sheet_creator import (
     SpriteSheetCreatorPanel,
@@ -40,6 +46,7 @@ from .sprite_sheet_creator import (
     OBJECT_OT_CreateSpriteSheet,
 )
 from bpy.types import AddonPreferences
+
 
 class SequencedBakeAddonProperties(AddonPreferences):
     bl_idname = __name__
@@ -69,7 +76,7 @@ class SequencedBakeAddonProperties(AddonPreferences):
         row.operator("wm.url_open", text="Blender Extensions").url = self.website_url
         row.operator("wm.url_open", text="GitHub").url = self.github_url
         row.operator("wm.url_open", text="Discord Community").url = self.discord_url
-        
+
 
 _node_menu_registered = False
 
@@ -89,6 +96,7 @@ def remove_custom_node_category():
         bpy.types.NODE_MT_add.remove(draw_custom_node_menu)
         _node_menu_registered = False
 
+
 def draw_custom_node_menu(self, context):
     layout = self.layout
     layout.operator("node.add_node", text="Sequenced Bake").type = "ShaderNodeSequencedBake"
@@ -105,6 +113,10 @@ classes = (
     SequencedBakeNode,
     SequencedBakeOperator,
     SequencedBakePanel,
+
+    # --- Sculpt Primitives ---
+    MESH_OT_add_sculpt_mesh,
+    VIEW3D_MT_mesh_sculpties_add,
 
     # --- Sprite Sheet ---
     SpriteSheetProperties,
@@ -132,10 +144,14 @@ def register():
         name="Sprite Sheet Props",
     )
 
+    # Append menus to Blender UI
     add_custom_node_category()
+    bpy.types.VIEW3D_MT_mesh_add.append(menu_func_add_sculpties)
 
 
 def unregister():
+    # Remove custom UI menus
+    bpy.types.VIEW3D_MT_mesh_add.remove(menu_func_add_sculpties)
     remove_custom_node_category()
 
     if hasattr(bpy.types.Scene, "sprite_sheet_props"):

@@ -26,7 +26,14 @@ from .ui import (
     SequencedBakeNode,
     SequencedBakeSocket,
 )
-from .operator import SequencedBakeOperator
+from .operator import (
+    SequencedBakeOperator,
+)
+from .sculpt_map import (
+    MESH_OT_add_sculpt_mesh,
+    VIEW3D_MT_mesh_sculpties_add,
+    menu_func_add_sculpties,
+)
 
 __all__ = (
     "SequencedBakeProperties",
@@ -34,4 +41,7 @@ __all__ = (
     "SequencedBakeNode",
     "SequencedBakeSocket",
     "SequencedBakeOperator",
+    "MESH_OT_add_sculpt_mesh",
+    "VIEW3D_MT_mesh_sculpties_add",
+    "menu_func_add_sculpties",
 )
