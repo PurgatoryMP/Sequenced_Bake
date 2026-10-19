@@ -95,68 +95,115 @@ Sequenced Bake dynamically modifies material node trees when required:
 
 ---
 
-## Sculpt Bake (Beta in v1.1.6)
+## Sculpt Maps in v1.1.8
 
-The Sculpt Bake system generates a **normalized object-space position map** by projecting mesh geometry into UV space and encoding vertex positions into an image.
+The Sculpt Map system generates a **normalized object-space position map** by projecting evaluated mesh geometry into UV space and encoding the resulting 3D positions into an RGB image.
 
-This bake is designed for **stable, frame-consistent output** across animated sequences.
+It is designed for **Second Life sculpt maps** and for stable sculpt-map generation across animated sequences.
 
 ## How It Works
 
-Mesh Density	Recommended Sculpt Map size in pixels.
-- Very low (≤10 tris) mesh -> 16×16 pixels
-- Low (10–100 tris) mesh -> 16×16 to 32x32 pixels
-- Medium (100–2k tris) mesh  -> 32×32 to 64x64 pixels
-- High (2k–10k tris) mesh -> 64×64 to 128x128 pixels
-- Very high (10k+) mesh -> 128×128 pixels (Secondlife Max Sculpt Resolution)
-
-Meshes can also have for example a 32x128 pixel sculpt map if the mesh is subdivided more along one axis vs another for long meshes or meshes like a railing or something like that.
-
 ### 1. Evaluated Mesh Sampling
-- Uses Blender’s evaluated mesh (including modifiers and animation)
-- Converts mesh into a BMesh for efficient UV access
 
-### 2. UV-Space Projection
-Each pixel represents a UV coordinate:
+- Uses Blender's evaluated mesh, including modifiers and animation.
+- Extracts the evaluated mesh geometry and active UV data.
+- Supports arbitrary mesh topology rather than requiring a specific subdivision layout.
 
-- The mesh is divided into triangles in UV space
-- Each pixel is tested against UV triangles
-- If the pixel lies inside a triangle:
-  - Barycentric coordinates are computed
-  - Vertex positions are interpolated
+### 2. UV-Space Rasterization
+
+The mesh is converted into triangles in UV space.
+
+For each sculpt-map pixel:
+
+- The corresponding UV coordinate is calculated.
+- UV triangles are tested for pixel coverage.
+- Barycentric coordinates are calculated for covered pixels.
+- The 3D vertex positions are interpolated across the triangle.
+
+This produces a continuous object-space position map across the UV surface.
 
 ### 3. Position Encoding
-- Interpolated 3D position is normalized using mesh bounds
-- Bounds are calculated once from the evaluated mesh
-- Prevents frame-to-frame scaling differences
 
-Final output:
+Interpolated object-space positions are normalized into the `0–1` range and encoded into the RGB channels:
+
 - **R = X**
 - **G = Y**
 - **B = Z**
 
+The resulting image contains the object-space position of the mesh surface at each UV location.
+
+### 4. Stable Sculpt Bounds
+
+Sculpt-map normalization can use a dedicated **Bounding Object**.
+
+When a bounding object is specified:
+
+- The bounding object's bounds are used as the normalization reference.
+- The same bounds are maintained across animation frames.
+- Deforming geometry does not cause the sculpt-map coordinate range to change.
+
+This helps prevent frame-to-frame scaling, shifting, or distortion in animated sculpt-map sequences.
+
+If no bounding object is specified, the bounds are calculated from the evaluated mesh.
+
+## Sculpt Map Resolution
+
+The sculpt-map resolution should generally match the density and proportions of the mesh.
+
+| Mesh Density | Recommended Resolution |
+|---|---|
+| Very Low (≤10 tris) | 16×16 |
+| Low (10–100 tris) | 16×16 – 32×32 |
+| Medium (100–2k tris) | 32×32 – 64×64 |
+| High (2k–10k tris) | 64×64 – 128×128 |
+| Very High (10k+ tris) | 128×128 |
+
+Non-square resolutions can also be useful when the UV layout has significantly different density along each axis.
+
+For example:
+
+- `32×128`
+- `64×128`
+- `128×64`
+
+This can be useful for long or highly directional meshes such as railings, strips, and other elongated assets.
+
 ## Key Features
 
-- Frame-stable normalization (no per-frame drift)
-- UV-based rasterization for accurate surface mapping
-- Supports animated meshes and modifiers
-- Direct object-space position encoding
-- Fully compatible with sequenced baking workflows
+- Evaluated mesh support
+- Modifier and animation support
+- UV-based triangle rasterization
+- Barycentric position interpolation
+- Object-space position encoding
+- Stable animation-frame normalization
+- Optional Bounding Object for consistent bounds
+- Support for arbitrary mesh topology
+- Improved handling of uncovered UV pixels
+- Designed for Second Life sculpt-map workflows
 
 ## Output
 
-- Image-based position map (RGB)
-- Values normalized to 0–1 range
-- Suitable for:
-  - Displacement reconstruction
-  - Procedural mesh workflows
-  - Animation baking pipelines
+The Sculpt Map produces an RGB position map where:
+
+- **Red** represents normalized X position.
+- **Green** represents normalized Y position.
+- **Blue** represents normalized Z position.
+
+The resulting image can be used for:
+
+- Second Life sculpt maps
+- Displacement reconstruction
+- Procedural mesh workflows
+- Animated mesh baking
+- Position-map based reconstruction pipelines
 
 ## Limitations
 
-- Requires clean UVs for best results
-- Overlapping UVs may produce conflicts
-- Best performance with non-overlapping topology
+- Requires a suitable UV layout for accurate results.
+- Overlapping UVs can produce conflicting pixel data.
+- UV seams and gaps may result in uncovered pixels.
+- Sculpt-map resolution should be appropriate for the mesh's topology and UV density.
+- For animated meshes, a **Bounding Object** is recommended when consistent frame-to-frame normalization is required.
 
 ---
 
