@@ -101,6 +101,28 @@ def draw_material_manager_ui(layout, context):
     row.prop(obj, "active_material", text="", icon='LINKED')
 
 
+class SEQUENCED_BAKE_UL_udim_tiles(bpy.types.UIList):
+    """Custom UIList for drawing UDIM tile indexes."""
+    def draw_item(
+        self,
+        context,
+        layout,
+        data,
+        item,
+        icon,
+        active_data,
+        active_propname,
+        index
+    ):
+        layout.prop(
+            item,
+            "tile_index",
+            text="",
+            emboss=False,
+            slider=False
+        )
+        
+        
 class SequencedBakeSocket(NodeSocket):
     """
     Custom NodeSocket for Sequenced Bake nodes.
@@ -238,9 +260,44 @@ def draw_sequenced_bake_ui(layout, props, source_node=None):
     if props.ui_show_texture_settings:
         col = box.column(align=True)
         col.prop(props, "interpolation")
+        
         col.prop(props, "projection")
+        if props.projection == 'Box':
+            col.prop(props, "projection_blend")
+            
         col.prop(props, "extension")
         col.prop(props, "colorspace")
+        
+        col.separator()
+        
+        col.prop(props, "image_source")
+        if props.image_source in {'SEQUENCE', 'MOVIE', 'FILE', 'TILED'}:
+            col.prop(props, "image_alpha_mode")
+            
+        # Inject UDIM specific UI elements when 'TILED' is active
+        if props.image_source == 'TILED':
+            col.separator()
+            col.prop(props, "udim_seam_margin")
+            
+            col.separator()
+            col.label(text="Active UDIM Tiles:")
+            
+            row = col.row()
+            # Draw the list box
+            row.template_list(
+                "SEQUENCED_BAKE_UL_udim_tiles",
+                "",
+                props,
+                "udim_tiles",
+                props,
+                "udim_active_index",
+                rows=3
+            )
+            
+            # Draw the plus/minus operator buttons next to the list
+            col_ops = row.column(align=True)
+            col_ops.operator("sequenced_bake.udim_add", icon='ADD', text="")
+            col_ops.operator("sequenced_bake.udim_remove", icon='REMOVE', text="")
 
     # Bake Type Options
     box = layout.box()
@@ -448,3 +505,4 @@ class SequencedBakeNode(Node):
 
     def draw_label(self):
         return "Sequenced Bake"
+        

@@ -153,7 +153,7 @@ def load_directory_images(
 
         props = getattr(bpy.context.scene, "sprite_sheet_props", None)
 
-        # Use_alphabetical_sort is enabled in the properties before sorting.
+        # FIX: Check if use_alphabetical_sort is enabled in the properties before sorting.
         # This ensures the user's UI selection dictates whether natural sort is applied.
         use_alpha_sort = getattr(props, "use_alphabetical_sort", True) if props else True
         case_sensitive = bool(props and props.alphabetical_case_sensitive)

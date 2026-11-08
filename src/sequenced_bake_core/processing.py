@@ -262,49 +262,199 @@ def create_image_texture(
     extension,
     colorspace,
     file_format,
+    projection_blend,
+    image_source,
+    image_alpha_mode,
+    udim_tiles=None,
 ):
-    """Create and activate an image texture node for baking.
+    """Create and configure a generated image or initialized UDIM image."""
 
-    Returns:
-        tuple: Created image texture node and image datablock.
-    """
+    # Determine image type from the actual Source setting.
+    is_udim = image_source == 'TILED'
+
+    if is_udim and not udim_tiles:
+        raise RuntimeError(
+            "UDIM baking selected, but no UDIM tiles have been configured."
+        )
+
+    # Validate and deduplicate requested tile indexes.
+    tile_numbers = sorted({
+        int(tile.tile_index)
+        for tile in (udim_tiles or [])
+    })
+
+    if is_udim:
+        invalid_tiles = [
+            number for number in tile_numbers
+            if number < 1001 or number > 2000
+        ]
+
+        if invalid_tiles:
+            raise ValueError(
+                f"Invalid UDIM tile indexes: {invalid_tiles}"
+            )
+
+    # Remove an existing image with the same name.
+    old_image = bpy.data.images.get(name)
+
+    if old_image:
+        bpy.data.images.remove(old_image)
+
+    # Create the image.
     image = bpy.data.images.new(
         name=name,
         width=width,
         height=height,
         alpha=alpha,
         float_buffer=float_buffer,
+        tiled=is_udim,
     )
+
+    
+    # Initialize all requested UDIM tiles.
+    if is_udim:
+
+        # Transparent black for alpha-enabled images.
+        # Opaque black when the image has no alpha channel.
+        clear_color = (
+            (0.0, 0.0, 0.0, 0.0)
+            if alpha
+            else (0.0, 0.0, 0.0, 1.0)
+        )
+
+        # Create every requested tile.
+        for tile_number in tile_numbers:
+
+            if image.tiles.get(tile_number) is not None:
+                continue
+
+            with bpy.context.temp_override(edit_image=image):
+
+                result = bpy.ops.image.tile_add(
+                    number=tile_number,
+                    count=1,
+                    fill=True,
+                    color=clear_color,
+                    width=width,
+                    height=height,
+                    float=float_buffer,
+                    alpha=alpha,
+                    generated_type='BLANK',
+                )
+
+            if 'FINISHED' not in result:
+                raise RuntimeError(
+                    f"Failed to initialize UDIM tile {tile_number}"
+                )
+
+        # Explicitly initialize every tile, including 1001.
+        # This ensures that no tile retains an opaque black buffer.
+        with bpy.context.temp_override(edit_image=image):
+
+            for tile_index, tile in enumerate(image.tiles):
+
+                image.tiles.active_index = tile_index
+
+                result = bpy.ops.image.tile_fill(
+                    color=clear_color,
+                    width=width,
+                    height=height,
+                    float=float_buffer,
+                    alpha=alpha,
+                    generated_type='BLANK',
+                )
+
+                if 'FINISHED' not in result:
+                    raise RuntimeError(
+                        f"Failed to clear UDIM tile {tile.number}"
+                    )
+
+        # Verify every requested tile exists and has an image buffer.
+        for tile_number in tile_numbers:
+
+            tile = image.tiles.get(tile_number)
+
+            if tile is None:
+                raise RuntimeError(
+                    f"UDIM tile {tile_number} was not created."
+                )
+
+            if tile.size[0] != width or tile.size[1] != height:
+                raise RuntimeError(
+                    f"UDIM tile {tile_number} has an invalid size: "
+                    f"{tile.size[0]}x{tile.size[1]}"
+                )
+
+        print(
+            f"[Sequenced Bake] Initialized UDIM image '{name}': "
+            f"{[tile.number for tile in image.tiles]}"
+        )
+
+    else:
+        image.source = 'GENERATED'
+
+
+    # Apply image settings.
+    image.alpha_mode = image_alpha_mode
 
     try:
         image.colorspace_settings.name = colorspace
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, RuntimeError) as exc:
         print(
-            f"[Sequenced Bake] Could not set image color space '{colorspace}' "
-            f"for '{image.name}': {exc}"
+            f"[Sequenced Bake] Colorspace assignment failed: {exc}"
         )
 
+    # Create and configure the image texture node.
     node_tree = material.node_tree
-    node = node_tree.nodes.new("ShaderNodeTexImage")
-    node.image = image
-    node.interpolation = interpolation
-    node.projection = projection.upper()
-    node.extension = extension.upper()
 
-    node_tree.nodes.active = node
-    for existing in node_tree.nodes:
-        existing.select = False
-    node.select = True
+    image_node = node_tree.nodes.new('ShaderNodeTexImage')
 
-    output = next(
-        (item for item in node_tree.nodes if item.type == "OUTPUT_MATERIAL"),
-        None,
+    image_node.image = image
+    image_node.name = 'Sequenced_Bake_Target'
+    image_node.interpolation = interpolation
+    extension_map = {
+        'Repeat': 'REPEAT',
+        'Extend': 'EXTEND',
+        'Clip': 'CLIP',
+        'Mirror': 'MIRROR',
+        'REPEAT': 'REPEAT',
+        'EXTEND': 'EXTEND',
+        'CLIP': 'CLIP',
+        'MIRROR': 'MIRROR',
+    }
+
+    image_node.extension = extension_map.get(extension, 'REPEAT')
+
+    # Blender's ShaderNodeTexImage uses uppercase projection identifiers.
+    projection_map = {
+        'Flat': 'FLAT',
+        'Box': 'BOX',
+        'Square': 'SPHERE',
+        'Tube': 'TUBE',
+    }
+
+    image_node.projection = projection_map.get(
+        projection, 'FLAT'
     )
-    if output:
-        node.location = (output.location.x + 300, output.location.y)
 
-    image.file_format = IMAGE_FORMAT_MAP.get(file_format, file_format)
-    return node, image
+    image_node.projection_blend = projection_blend
+
+    # Set the image node as the active baking target.
+    for node in node_tree.nodes:
+        node.select = False
+
+    image_node.select = True
+    node_tree.nodes.active = image_node
+
+    # Diagnostic output.
+    if is_udim:
+        print(
+            f"[Sequenced Bake] Initialized UDIM image '{name}': "
+            f"{[tile.number for tile in image.tiles]}"
+        )
+
+    return image_node, image
+
 
 
 def _configure_bake_pass(bake, bake_type, props):
@@ -365,7 +515,12 @@ def _save_image(image, output_dir, frame, file_format):
     extension = file_format.lower()
     if extension in {"openexr", "exr"}:
         extension = "exr"
-    filepath = os.path.join(output_dir, f"{frame}.{extension}")
+
+    if image.source == 'TILED':
+        filepath = os.path.join(output_dir, f"{frame}.<UDIM>.{extension}")
+    else:
+        filepath = os.path.join(output_dir, f"{frame}.{extension}")
+        
     image.filepath_raw = filepath
     image.save()
     return filepath

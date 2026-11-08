@@ -32,6 +32,253 @@ from .processing import (
 )
 
 
+
+class SEQUENCED_BAKE_OT_udim_add(bpy.types.Operator):
+    """Add the next available UDIM tile immediately."""
+
+    bl_idname = "sequenced_bake.udim_add"
+    bl_label = "Add UDIM Tile"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.sequenced_bake_props
+
+        existing_tiles = {
+            tile.tile_index
+            for tile in props.udim_tiles
+        }
+
+        # Find the first available valid UDIM index.
+        tile_number = 1001
+
+        while tile_number in existing_tiles and tile_number <= 2000:
+            tile_number += 1
+
+        if tile_number > 2000:
+            self.report(
+                {'ERROR'},
+                "No available UDIM indexes remain."
+            )
+            return {'CANCELLED'}
+
+        new_tile = props.udim_tiles.add()
+        new_tile.name = str(tile_number)
+        new_tile.tile_index = tile_number
+
+        props.udim_active_index = len(props.udim_tiles) - 1
+
+        print(
+            f"[Sequenced Bake] Added UDIM tile {tile_number}"
+        )
+
+        return {'FINISHED'}
+
+
+class SEQUENCED_BAKE_OT_udim_remove(bpy.types.Operator):
+    """Remove the currently selected UDIM tile."""
+
+    bl_idname = "sequenced_bake.udim_remove"
+    bl_label = "Remove UDIM Tile"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.sequenced_bake_props
+
+        if not props.udim_tiles:
+            props.udim_active_index = 0
+            return {'CANCELLED'}
+
+        index = props.udim_active_index
+
+        if not 0 <= index < len(props.udim_tiles):
+            return {'CANCELLED'}
+
+        removed_number = props.udim_tiles[index].tile_index
+
+        props.udim_tiles.remove(index)
+
+        if props.udim_tiles:
+            props.udim_active_index = min(
+                index,
+                len(props.udim_tiles) - 1
+            )
+        else:
+            props.udim_active_index = 0
+
+        print(
+            f"[Sequenced Bake] Removed UDIM tile {removed_number}"
+        )
+
+        return {'FINISHED'}
+        
+
+
+def diagnose_udim_uv_layout(obj, udim_tiles):
+    """
+    Inspect the active and render UV maps using Blender 5.2's
+    current UV attribute API.
+
+    Reports the UV tile occupied by each polygon and checks
+    whether the requested image contains those tiles.
+    """
+
+    import math
+
+    if not obj or obj.type != 'MESH':
+        raise RuntimeError(
+            "UDIM diagnostics require an active mesh object."
+        )
+
+    mesh = obj.data
+
+    active_uv = mesh.uv_layers.active
+    render_uv = mesh.uv_layers.active_render
+
+    print("\n========== SEQUENCED BAKE UDIM DIAGNOSTICS ==========")
+    print(f"Object: {obj.name}")
+    print(f"Mesh: {mesh.name}")
+    print(f"Mesh Vertices: {len(mesh.vertices)}")
+    print(f"Mesh Loops: {len(mesh.loops)}")
+    print(f"Mesh Polygons: {len(mesh.polygons)}")
+    print(f"UV Maps: {len(mesh.uv_layers)}")
+
+    if not active_uv:
+        print("[ERROR] No active UV map.")
+        print("=====================================================\n")
+        return
+
+    print(f"Active UV Map: {active_uv.name}")
+    print(f"Active UV Coordinates: {len(active_uv.uv)}")
+    print(
+        "Render UV Map: "
+        f"{render_uv.name if render_uv else 'None'}"
+    )
+
+    uv_layer = render_uv if render_uv else active_uv
+
+    if len(uv_layer.uv) != len(mesh.loops):
+        print(
+            "[ERROR] UV coordinate count does not match "
+            "the mesh loop count."
+        )
+        print("=====================================================\n")
+        return
+
+    requested_tiles = {
+        int(tile.tile_index)
+        for tile in udim_tiles
+    }
+
+    print(f"Requested UDIM Tiles: {sorted(requested_tiles)}")
+
+    def get_udim_number(u, v):
+        tile_u = math.floor(u)
+        tile_v = math.floor(v)
+
+        if not (0 <= tile_u <= 9 and 0 <= tile_v <= 99):
+            return None
+
+        return 1001 + tile_u + (tile_v * 10)
+
+    tile_face_counts = {}
+    invalid_faces = []
+    crossing_faces = []
+
+    for polygon in mesh.polygons:
+
+        coords = [
+            uv_layer.uv[index].vector.copy()
+            for index in polygon.loop_indices
+        ]
+
+        if not coords:
+            continue
+
+        # Determine the polygon's UV center.
+        center_u = sum(uv.x for uv in coords) / len(coords)
+        center_v = sum(uv.y for uv in coords) / len(coords)
+
+        tile_number = get_udim_number(center_u, center_v)
+
+        if tile_number is None:
+            invalid_faces.append(polygon.index)
+            continue
+
+        tile_face_counts[tile_number] = (
+            tile_face_counts.get(tile_number, 0) + 1
+        )
+
+        # Detect polygons whose UV corners occupy
+        # more than one UDIM tile.
+        corner_tiles = {
+            get_udim_number(uv.x, uv.y)
+            for uv in coords
+        }
+
+        corner_tiles.discard(None)
+
+        if len(corner_tiles) > 1:
+            crossing_faces.append(
+                (polygon.index, sorted(corner_tiles))
+            )
+
+    print("\nUV Face Distribution:")
+
+    for tile_number, count in sorted(tile_face_counts.items()):
+
+        status = (
+            "OK"
+            if tile_number in requested_tiles
+            else "MISSING FROM IMAGE"
+        )
+
+        print(
+            f"  UDIM {tile_number}: "
+            f"{count} faces [{status}]"
+        )
+
+    missing_tiles = (
+        set(tile_face_counts.keys()) - requested_tiles
+    )
+
+    unused_tiles = (
+        requested_tiles - set(tile_face_counts.keys())
+    )
+
+    if missing_tiles:
+        print("\n[ERROR] UVs occupy tiles missing from the image:")
+
+        for tile_number in sorted(missing_tiles):
+            print(f"  Missing UDIM: {tile_number}")
+
+    if unused_tiles:
+        print("\n[INFO] Requested tiles without UV faces:")
+
+        for tile_number in sorted(unused_tiles):
+            print(f"  Unused UDIM: {tile_number}")
+
+    if crossing_faces:
+        print("\n[WARNING] Faces crossing UDIM boundaries:")
+
+        for face_index, tiles in crossing_faces[:30]:
+            print(f"  Face {face_index}: {tiles}")
+
+    if invalid_faces:
+        print("\n[ERROR] Faces outside supported UDIM coordinates:")
+
+        for face_index in invalid_faces[:30]:
+            print(f"  Face {face_index}")
+
+    if not tile_face_counts:
+        print("\n[ERROR] No UV faces could be classified.")
+
+    if not missing_tiles and tile_face_counts:
+        print("\n[OK] All UV-occupied tiles exist in the image.")
+
+    print("=====================================================\n")
+
+
+
 class SequencedBakeOperator(bpy.types.Operator):
     """Bake selected material passes across a frame sequence."""
 
@@ -111,6 +358,12 @@ class SequencedBakeOperator(bpy.types.Operator):
 
         scene = self._scene
         props = self._props
+        
+        if props.image_source == 'TILED':
+            diagnose_udim_uv_layout(
+                self._obj,
+                props.udim_tiles
+            )
 
         self._bake_map = {
             "NORMAL": props.sequenced_bake_normal,
@@ -266,6 +519,10 @@ class SequencedBakeOperator(bpy.types.Operator):
                 extension=self._props.extension,
                 colorspace=colorspace,
                 file_format=self._props.sequenced_bake_image_format,
+                projection_blend=self._props.projection_blend,
+                image_source=self._props.image_source,
+                image_alpha_mode=self._props.image_alpha_mode,
+                udim_tiles=self._props.udim_tiles,
             )
             self._generated_images.append(image)
             self._active_material = material

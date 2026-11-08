@@ -39,6 +39,21 @@ IMAGE_FORMAT_ITEMS = [
     ("DPX", "DPX", "Save as DPX"),
 ]
 
+IMAGE_SOURCE_ITEMS = [
+    ('GENERATED', "Generated", "Generated image (Default)"),
+    ('SEQUENCE', "Image Sequence", "Image sequence"),
+    ('MOVIE', "Movie", "Movie file"),
+    ('FILE', "Single Image", "Single image file"),
+    ('TILED', "UDIM Tiles", "UDIM tiled image"),
+]
+
+ALPHA_MODE_ITEMS = [
+    ('STRAIGHT', "Straight", "Transparent RGB and alpha pixels are unmodified"),
+    ('PREMUL', "Premultiplied", "Transparent RGB pixels are multiplied by the alpha channel"),
+    ('CHANNEL_PACKED', "Channel Packed", "Image rgb and alpha channels are packed"),
+    ('NONE', "None", "Image has no alpha channel"),
+]
+
 NORMAL_MAP_PRESET_ITEMS = [
     # --- API Conventions ---
     ('OPENGL', "OpenGL", "Standard OpenGL normal map convention (+Y)"),
@@ -285,10 +300,10 @@ PROJECTION_ITEMS = [
 ]
 
 EXTENSION_ITEMS = [
-    ('Repeat', "Repeat", "Repeat the texture"),
-    ('Extend', "Extend", "Extend the texture edges"),
-    ('Clip', "Clip", "Clip the texture to the image bounds"),
-    ('Mirror', "Mirror", "Mirror the texture"),
+    ('REPEAT', "Repeat", "Repeat the texture"),
+    ('EXTEND', "Extend", "Extend the texture edges"),
+    ('CLIP', "Clip", "Clip the texture to the image bounds"),
+    ('MIRROR', "Mirror", "Mirror the texture"),
 ]
 
 COLOR_SPACE_ITEMS = [
@@ -400,6 +415,21 @@ COLOR_SPACE_ITEMS = [
 ]
 
 
+class SequencedBakeUDIMTile(PropertyGroup):
+    """Data structure representing a single UDIM tile index in the bake queue."""
+    name: bpy.props.StringProperty(
+        name="Name", 
+        default="1001"
+    )
+    tile_index: bpy.props.IntProperty(
+        name="UDIM Index",
+        description="UDIM tile number",
+        default=1001,
+        min=1001,
+        max=2000
+    )
+       
+        
 class SequencedBakeProperties(PropertyGroup):
     # UI Collapse Toggles
     ui_show_image_settings: bpy.props.BoolProperty(
@@ -466,6 +496,52 @@ class SequencedBakeProperties(PropertyGroup):
         name="Selected to Active",
         description='Enable to bake from the selected object into the active one',
         default=False
+    )
+    
+    # Immage Texture Settings.
+    extension: bpy.props.EnumProperty(
+        name="Extension",
+        description="How the image texture behaves outside its bounds",
+        items=EXTENSION_ITEMS,
+        default='REPEAT',
+    )
+    projection_blend: bpy.props.FloatProperty(
+        name="Blend",
+        description="For box mapping, amount of blend to use between sides",
+        default=0.0,
+        min=0.0,
+        max=1.0
+    )
+    image_source: bpy.props.EnumProperty(
+        name="Source",
+        description="Select the image source type",
+        items=IMAGE_SOURCE_ITEMS,
+        default='GENERATED'
+    )
+    image_alpha_mode: bpy.props.EnumProperty(
+        name="Alpha",
+        description="Representation of alpha in the image file",
+        items=ALPHA_MODE_ITEMS,
+        default='STRAIGHT'
+    )
+    
+    # UDIM Settings
+    udim_seam_margin: bpy.props.IntProperty(
+        name="Seam Margin",
+        description="Texture seam margin/bleed for UDIM tile boundaries",
+        default=8,
+        min=0,
+        max=64
+    )
+    udim_tiles: bpy.props.CollectionProperty(
+        name="UDIM Tiles",
+        type=SequencedBakeUDIMTile,
+        description="List of active UDIM tile indexes to bake"
+    )
+    udim_active_index: bpy.props.IntProperty(
+        name="Active UDIM Index",
+        description="Currently selected UDIM tile in the UI list",
+        default=0
     )
 
     # Selected to Active options.
@@ -772,13 +848,6 @@ class SequencedBakeProperties(PropertyGroup):
         items=PROJECTION_ITEMS,
         default='Flat'
     )
-    extension: bpy.props.EnumProperty(
-        name="Extension",
-        description="Set the texture extension method",
-        items=EXTENSION_ITEMS,
-        default='Repeat'
-    )
-
     colorspace: bpy.props.EnumProperty(
         name="Colorspace",
         description="Select the color space",

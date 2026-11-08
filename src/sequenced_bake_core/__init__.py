@@ -19,14 +19,20 @@
 # This package intentionally does NOT register or unregister Blender classes.
 # All registration is handled by the root add-on __init__.py.
 
-from .properties import SequencedBakeProperties
+from .properties import (
+    SequencedBakeUDIMTile,
+    SequencedBakeProperties,
+)
 
 from .ui import (
+    SEQUENCED_BAKE_UL_udim_tiles,
     SequencedBakePanel,
     SequencedBakeNode,
     SequencedBakeSocket,
 )
 from .operator import (
+    SEQUENCED_BAKE_OT_udim_add,
+    SEQUENCED_BAKE_OT_udim_remove,
     SequencedBakeOperator,
 )
 from .sculpt_map import (
@@ -36,10 +42,14 @@ from .sculpt_map import (
 )
 
 __all__ = (
+    "SequencedBakeUDIMTile",
     "SequencedBakeProperties",
+    "SEQUENCED_BAKE_UL_udim_tiles",
     "SequencedBakePanel",
     "SequencedBakeNode",
     "SequencedBakeSocket",
+    "SEQUENCED_BAKE_OT_udim_add",
+    "SEQUENCED_BAKE_OT_udim_remove",
     "SequencedBakeOperator",
     "MESH_OT_add_sculpt_mesh",
     "VIEW3D_MT_mesh_sculpties_add",

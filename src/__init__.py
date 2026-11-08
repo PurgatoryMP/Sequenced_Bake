@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 1, 9),
+    "version": (1, 2, 0),
     "blender": (5, 0, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -27,7 +27,18 @@ bl_info = {
 }
 
 import bpy
+from . import node_group_library
+from .node_group_library import (
+    SequencedBakeNodeGroupOperator,
+    NODE_MT_sequenced_bake_group_library,
+    register_node_group_library,
+    unregister_node_group_library,
+)
 from .sequenced_bake_core import (
+    SequencedBakeUDIMTile,
+    SEQUENCED_BAKE_UL_udim_tiles,
+    SEQUENCED_BAKE_OT_udim_add,
+    SEQUENCED_BAKE_OT_udim_remove,
     SequencedBakeProperties,
     SequencedBakePanel,
     SequencedBakeNode,
@@ -81,6 +92,46 @@ class SequencedBakeAddonProperties(AddonPreferences):
 _node_menu_registered = False
 
 
+class NODE_MT_sequenced_bake_add_menu(bpy.types.Menu):
+    """Organize all Sequenced Bake nodes under one Add-menu submenu."""
+
+    bl_label = "Sequenced Bake"
+    bl_idname = "NODE_MT_sequenced_bake_add_menu"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator(
+            "node.add_node",
+            text="Sequenced Bake",
+            icon="NODE",
+        ).type = "ShaderNodeSequencedBake"
+        layout.operator(
+            "node.add_node",
+            text="Sprite Sheet Creator",
+            icon="NODE",
+        ).type = "ShaderNodeSpriteSheetCreatorNode"
+        layout.separator()
+        layout.menu(
+            "NODE_MT_sequenced_bake_group_library",
+            text="Node Group Library",
+            icon="NODETREE",
+        )
+
+
+def draw_custom_node_menu(self, context):
+    """Add the Sequenced Bake submenu to compatible Shader Editors."""
+    space = getattr(context, "space_data", None)
+    if not space or space.type != "NODE_EDITOR":
+        return
+    if getattr(space, "tree_type", "") != "ShaderNodeTree":
+        return
+    self.layout.menu(
+        NODE_MT_sequenced_bake_add_menu.bl_idname,
+        text="Sequenced Bake",
+        icon="NODETREE",
+    )
+
+
 def add_custom_node_category():
     """Add custom node entries to Blender's Add menu."""
     global _node_menu_registered
@@ -93,38 +144,42 @@ def remove_custom_node_category():
     """Remove custom node entries from Blender's Add menu."""
     global _node_menu_registered
     if _node_menu_registered:
-        bpy.types.NODE_MT_add.remove(draw_custom_node_menu)
+        try:
+            bpy.types.NODE_MT_add.remove(draw_custom_node_menu)
+        except (ValueError, RuntimeError):
+            pass
         _node_menu_registered = False
 
 
-def draw_custom_node_menu(self, context):
-    layout = self.layout
-    layout.operator("node.add_node", text="Sequenced Bake").type = "ShaderNodeSequencedBake"
-    layout.operator("node.add_node", text="Sprite Sheet Creator").type = "ShaderNodeSpriteSheetCreatorNode"
-
-
 classes = (
-    # --- Preferences ---
+    # Preferences
     SequencedBakeAddonProperties,
 
-    # --- Sequenced Bake ---
+    # Sequenced Bake
+    SequencedBakeUDIMTile,
+    SEQUENCED_BAKE_UL_udim_tiles,
+    SEQUENCED_BAKE_OT_udim_add,
+    SEQUENCED_BAKE_OT_udim_remove,
     SequencedBakeProperties,
     SequencedBakeSocket,
     SequencedBakeNode,
     SequencedBakeOperator,
     SequencedBakePanel,
 
-    # --- Sculpt Primitives ---
+    # Sculpt Primitives
     MESH_OT_add_sculpt_mesh,
     VIEW3D_MT_mesh_sculpties_add,
 
-    # --- Sprite Sheet ---
+    # Sprite Sheet
     SpriteSheetProperties,
     SpriteSheetCreatorSocket,
     SpriteSheetCreatorNode,
     OBJECT_OT_CreateSpriteSheet,
     SpriteSheetCreatorPanel,
     SpriteSheetCreatorVSEPanel,
+    NODE_MT_sequenced_bake_group_library,
+    SequencedBakeNodeGroupOperator,
+    NODE_MT_sequenced_bake_add_menu,
 )
 
 
@@ -144,6 +199,9 @@ def register():
         name="Sprite Sheet Props",
     )
 
+    # Build and register the procedural node-group library.
+    register_node_group_library()
+
     # Append menus to Blender UI
     add_custom_node_category()
     bpy.types.VIEW3D_MT_mesh_add.append(menu_func_add_sculpties)
@@ -153,6 +211,7 @@ def unregister():
     # Remove custom UI menus
     bpy.types.VIEW3D_MT_mesh_add.remove(menu_func_add_sculpties)
     remove_custom_node_category()
+    unregister_node_group_library()
 
     if hasattr(bpy.types.Scene, "sprite_sheet_props"):
         del bpy.types.Scene.sprite_sheet_props
