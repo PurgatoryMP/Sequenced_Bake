@@ -15,9 +15,6 @@
 
 """
 
-# NOTE:
-# This package intentionally does NOT register or unregister Blender classes.
-# All registration is handled by the root add-on __init__.py.
 
 from .properties import (
     SequencedBakeUDIMTile,

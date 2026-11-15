@@ -283,7 +283,6 @@ def draw_sequenced_bake_ui(layout, props, source_node=None):
             col.label(text="Active UDIM Tiles:")
             
             row = col.row()
-            # Draw the list box
             row.template_list(
                 "SEQUENCED_BAKE_UL_udim_tiles",
                 "",
@@ -294,7 +293,6 @@ def draw_sequenced_bake_ui(layout, props, source_node=None):
                 rows=3
             )
             
-            # Draw the plus/minus operator buttons next to the list
             col_ops = row.column(align=True)
             col_ops.operator("sequenced_bake.udim_add", icon='ADD', text="")
             col_ops.operator("sequenced_bake.udim_remove", icon='REMOVE', text="")
@@ -372,6 +370,8 @@ def draw_sequenced_bake_ui(layout, props, source_node=None):
             row = col.row()
             row.separator(factor=option_padding)
             row.prop(props, "sequenced_bake_sculpt_bounds_object")
+            
+        col.prop(props, "sequenced_bake_color_id")
 
     # Color Management
     box = layout.box()
@@ -418,7 +418,13 @@ def draw_sequenced_bake_ui(layout, props, source_node=None):
                 text=f"Frames: {bpy.context.scene.frame_start} → {bpy.context.scene.frame_end} (step {props.frame_step})",
                 icon='TIME'
             )
-
+        
+        col.separator(factor=1.0)
+        
+        col.label(text="File Prefix:")
+        col.prop(props, "sequenced_bake_prefix")
+        col.separator(factor=0.5)
+        
         col.label(text="Material Output Path:")
         col.prop(props, "sequenced_bake_output_path")
 

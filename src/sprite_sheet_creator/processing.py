@@ -20,7 +20,7 @@ import os
 import platform
 import re
 import subprocess
-
+import math
 import bpy
 import numpy as np
 
@@ -37,6 +37,7 @@ IMAGE_FORMAT_MAP = {
     "dpx": "DPX",
 }
 
+_UDIM_PATTERN = re.compile(r"(?:^|[._-])(1\d{3}|2000)$")
 
 def _report(report_fn, level, message):
     """Send a message through a Blender report callback when available."""
@@ -112,19 +113,152 @@ def _natural_sort_key(filename, case_sensitive=False):
     return tuple(int(part) if part.isdigit() else part for part in parts)
 
 
-def load_directory_images(
+def _extract_udim_tile(filename):
+    """Extract a valid UDIM tile index (1001-2000) from the end of a filename stem."""
+    stem = os.path.splitext(filename)[0]
+    match = _UDIM_PATTERN.search(stem)
+    if not match:
+        return None
+    tile = int(match.group(1))
+    return tile if 1001 <= tile <= 2000 else None
+
+
+def load_directory_udim_groups(
         directory,
         start_frame=None,
         end_frame=None,
-        reversed_order=False,
         report_fn=None,
 ):
-    """Load image files from a directory in the configured order."""
-    images = []
+    """Load directory images grouped by UDIM tile index, respecting directory_images order."""
+    grouped_images = {}
     image_extensions = {
         ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".tga",
         ".exr", ".hdr", ".cin", ".dpx", ".webp",
     }
+
+    if not os.path.isdir(directory):
+        _report(report_fn, {"ERROR"}, f"Directory not found: {directory}")
+        return grouped_images
+
+    props = getattr(bpy.context.scene, "sprite_sheet_props", None)
+    norm_target_dir = os.path.normcase(os.path.normpath(directory))
+
+    # Check if directory_images already holds items for this directory (plus any appended files)
+    collection_items_for_dir = []
+    if props and len(props.directory_images) > 0:
+        has_matching_dir = any(
+            os.path.normcase(os.path.normpath(os.path.dirname(bpy.path.abspath(item.filepath)))) == norm_target_dir
+            for item in props.directory_images
+        )
+        if has_matching_dir:
+            for item in props.directory_images:
+                abs_fp = bpy.path.abspath(item.filepath)
+                if os.path.isfile(abs_fp):
+                    collection_items_for_dir.append((item.name, abs_fp, item.udim))
+
+    buckets = {}
+
+    if collection_items_for_dir:
+        # Preserve the exact order and full filepaths from props.directory_images
+        for name, abs_fp, item_udim in collection_items_for_dir:
+            udim = item_udim if item_udim != 0 else _extract_udim_tile(name)
+            buckets.setdefault(udim, []).append((name, abs_fp))
+
+        if len(buckets) > 1 and None in buckets:
+            del buckets[None]
+    else:
+        # Fallback for batch subdirectories not currently loaded in the UI list
+        try:
+            files = os.listdir(directory)
+        except Exception as exc:
+            _report(
+                report_fn,
+                {"ERROR"},
+                f"Failed to list directory contents: {directory}\nError: {exc}",
+            )
+            return grouped_images
+
+        image_files = [
+            filename
+            for filename in files
+            if os.path.splitext(filename)[1].lower() in image_extensions
+        ]
+
+        if not image_files:
+            _report(report_fn, {"WARNING"}, f"No image files found in directory: {directory}")
+            return grouped_images
+
+        for filename in image_files:
+            udim = _extract_udim_tile(filename)
+            buckets.setdefault(udim, []).append((filename, os.path.join(directory, filename)))
+
+        if len(buckets) > 1 and None in buckets:
+            del buckets[None]
+
+        for udim in buckets:
+            buckets[udim].sort(key=lambda entry: _natural_sort_key(entry[0]))
+
+    for udim in sorted(buckets.keys(), key=lambda x: (x is None, x)):
+        tile_entries = buckets[udim]
+
+        total_images = len(tile_entries)
+        start_index = max(0, (start_frame - 1) if start_frame else 0)
+        end_index = min(total_images, end_frame if end_frame else total_images)
+
+        if start_index >= total_images:
+            label = f"UDIM {udim}" if udim is not None else directory
+            _report(
+                report_fn,
+                {"WARNING"},
+                f"start_frame {start_frame} exceeds number of images ({total_images}) for {label}",
+            )
+            continue
+
+        selected_entries = tile_entries[start_index:end_index]
+
+        label = f"UDIM {udim}" if udim is not None else "Standard"
+        print(f"[Sprite Sheet Creator] Frame order ({label}): " + ", ".join(name for name, _ in selected_entries))
+
+        loaded = []
+        for filename, path in selected_entries:
+            try:
+                loaded.append(bpy.data.images.load(path, check_existing=False))
+            except RuntimeError as exc:
+                _report(
+                    report_fn,
+                    {"WARNING"},
+                    f"Failed to load image: {filename}\nBlender Error: {exc}",
+                )
+            except Exception as exc:
+                _report(
+                    report_fn,
+                    {"ERROR"},
+                    f"Unexpected error loading image: {filename}\nError: {exc}",
+                )
+
+        if loaded:
+            grouped_images[udim] = loaded
+
+    return grouped_images
+    
+
+def load_directory_images(
+        directory,
+        start_frame=None,
+        end_frame=None,
+        report_fn=None,
+):
+    """Load image files from a directory in the configured order."""
+    groups = load_directory_udim_groups(
+        directory,
+        start_frame=start_frame,
+        end_frame=end_frame,
+        report_fn=report_fn,
+    )
+    if not groups:
+        return []
+    first_key = next(iter(groups))
+    return groups[first_key]
 
     try:
         if not os.path.isdir(directory):
@@ -152,9 +286,6 @@ def load_directory_images(
             return images
 
         props = getattr(bpy.context.scene, "sprite_sheet_props", None)
-
-        # FIX: Check if use_alphabetical_sort is enabled in the properties before sorting.
-        # This ensures the user's UI selection dictates whether natural sort is applied.
         use_alpha_sort = getattr(props, "use_alphabetical_sort", True) if props else True
         case_sensitive = bool(props and props.alphabetical_case_sensitive)
 
@@ -167,11 +298,7 @@ def load_directory_images(
                 reverse=bool(props and props.alphabetical_reverse),
             )
         else:
-            # Fallback to standard lexicographical sort if natural sort is disabled
             image_files.sort(reverse=bool(props and props.alphabetical_reverse))
-
-        # Reverse Order is a separate sequence operation and is applied only
-        # after the requested frame range has been selected below.
 
         total_images = len(image_files)
         start_index = max(0, (start_frame - 1) if start_frame else 0)
@@ -187,7 +314,6 @@ def load_directory_images(
 
         image_files = image_files[start_index:end_index]
 
-        # Apply the final range reversal if requested by the user
         if reversed_order:
             image_files.reverse()
 
@@ -277,8 +403,6 @@ def load_vse_frames(context, props, report_fn=None):
         for strip, mute in original_mute.items():
             strip.mute = mute
 
-    if props.is_reversed:
-        images.reverse()
     return images
 
 
@@ -321,9 +445,6 @@ def load_compositor_frames(context, props, report_fn=None):
         scene.render.resolution_x = original["res_x"]
         scene.render.resolution_y = original["res_y"]
         scene.render.resolution_percentage = original["percent"]
-
-    if props.is_reversed:
-        images.reverse()
     return images
 
 
@@ -337,26 +458,49 @@ def _remove_temporary_images(images):
             print(f"[Sprite Sheet Creator] Failed to remove temporary image: {exc}")
 
 
-def process_images(images, props, output_name, report_fn=None):
-    """Assemble, save, and optionally display a sprite sheet."""
+def process_images(images, props, output_name, report_fn=None, udim_tile=None):
+    """Assemble, save, and optionally display one or more sprite sheets."""
     if not images:
         _report(report_fn, {"WARNING"}, "No images to process")
         return None
+
+    width = props.image_width
+    height = props.image_height
+
+    if props.use_fixed_resolution:
+        sheet_width = props.output_width
+        sheet_height = props.output_height
+        columns = sheet_width // width
+        rows = sheet_height // height
+
+        if columns < 1 or rows < 1:
+            _report(
+                report_fn,
+                {"ERROR"},
+                f"Cell size ({width}x{height}) is larger than Fixed Output Resolution ({sheet_width}x{sheet_height})",
+            )
+            return None
+    else:
+        columns = props.columns
+        rows = props.rows
+        sheet_width = columns * width
+        sheet_height = rows * height
 
     settings_summary = (
         f"Sprite Sheet Settings:\n"
         f"  Source Type: {props.source_type}\n"
         f"  Start Frame: {props.start_frame}\n"
         f"  End Frame: {props.end_frame}\n"
-        f"  Columns x Rows: {props.columns} x {props.rows}\n"
-        f"  Cell Size: {props.image_width} x {props.image_height}\n"
+        f"  Fixed Output Resolution: {props.use_fixed_resolution}\n"
+        f"  Sheet Resolution: {sheet_width} x {sheet_height}\n"
+        f"  Columns x Rows: {columns} x {rows}\n"
+        f"  Cell Size: {width} x {height}\n"
         f"  File Name: {props.file_name or output_name}\n"
         f"  Image Format: {props.sprite_sheet_image_format}\n"
         f"  Use Alpha: {props.sprite_sheet_is_alpha}\n"
         f"  Overwrite Existing: {props.file_overwrite}\n"
         f"  Open Images After Save: {props.open_images}\n"
-        f"  Open Output Directory: {props.open_output_directory}\n"
-        f"  Reversed Order: {props.is_reversed}"
+        f"  Open Output Directory: {props.open_output_directory}"
     )
     print(settings_summary)
     _report(report_fn, {"INFO"}, f"Starting sprite sheet generation: {output_name}")
@@ -365,6 +509,7 @@ def process_images(images, props, output_name, report_fn=None):
     if not selected_images:
         _report(report_fn, {"WARNING"}, "No images remain after source frame selection")
         return None
+
     directory = bpy.path.abspath(
         props.directory
         if props.source_type == "DIRECTORY"
@@ -387,79 +532,100 @@ def process_images(images, props, output_name, report_fn=None):
         )
         return None
 
-    columns = props.columns
-    rows = props.rows
-    width = props.image_width
-    height = props.image_height
-    sheet_width = columns * width
-    sheet_height = rows * height
+    cells_per_sheet = columns * rows
 
-    try:
-        sprite = bpy.data.images.new(
-            name=f"{output_name}_sprite_sheet",
-            width=sheet_width,
-            height=sheet_height,
-            alpha=props.sprite_sheet_is_alpha,
-        )
-        sprite.file_format = IMAGE_FORMAT_MAP[props.sprite_sheet_image_format]
-    except Exception as exc:
-        _report(report_fn, {"ERROR"}, f"Failed to create sprite sheet image\nError: {exc}")
-        return None
+    # Split into multiple sheets when Fixed Output Resolution is enabled
+    if props.use_fixed_resolution:
+        chunks = [
+            selected_images[i:i + cells_per_sheet]
+            for i in range(0, len(selected_images), cells_per_sheet)
+        ]
+    else:
+        chunks = [selected_images[:cells_per_sheet]]
 
-    pixels = np.zeros((sheet_height, sheet_width, 4), dtype=np.float32)
-    if not props.sprite_sheet_is_alpha:
-        pixels[:, :, 3] = 1.0
+    total_sheets = len(chunks)
+    last_saved_path = None
 
-    for index, image in enumerate(selected_images[: columns * rows]):
+    for sheet_idx, chunk in enumerate(chunks, start=1):
         try:
-            x = (index % columns) * width
-            y = (index // columns) * height
-            source = _read_image_pixels(image)
-            scaled = _resize_nearest(source, width, height)
-
-            if not props.sprite_sheet_is_alpha:
-                scaled = scaled.copy()
-                scaled[:, :, 3] = 1.0
-
-            target_y0 = sheet_height - y - height
-            pixels[target_y0:target_y0 + height, x:x + width] = scaled
+            sprite = bpy.data.images.new(
+                name=f"{output_name}_sprite_sheet_{sheet_idx}",
+                width=sheet_width,
+                height=sheet_height,
+                alpha=props.sprite_sheet_is_alpha,
+            )
+            sprite.file_format = IMAGE_FORMAT_MAP[props.sprite_sheet_image_format]
         except Exception as exc:
-            _report(
-                report_fn,
-                {"WARNING"},
-                f"Failed to process image {image.name}\nError: {exc}",
+            _report(report_fn, {"ERROR"}, f"Failed to create sprite sheet image\nError: {exc}")
+            continue
+
+        pixels = np.zeros((sheet_height, sheet_width, 4), dtype=np.float32)
+        if not props.sprite_sheet_is_alpha:
+            pixels[:, :, 3] = 1.0
+
+        for index, image in enumerate(chunk):
+            try:
+                x = (index % columns) * width
+                y = (index // columns) * height
+                source = _read_image_pixels(image)
+                scaled = _resize_nearest(source, width, height)
+
+                if not props.sprite_sheet_is_alpha:
+                    scaled = scaled.copy()
+                    scaled[:, :, 3] = 1.0
+
+                target_y0 = sheet_height - y - height
+                pixels[target_y0:target_y0 + height, x:x + width] = scaled
+            except Exception as exc:
+                _report(
+                    report_fn,
+                    {"WARNING"},
+                    f"Failed to process image {image.name}\nError: {exc}",
+                )
+
+        try:
+            sprite.pixels.foreach_set(pixels.ravel())
+            sprite.update()
+        except Exception as exc:
+            _report(report_fn, {"ERROR"}, f"Failed to write sprite sheet pixels\nError: {exc}")
+            if sprite.name in bpy.data.images:
+                bpy.data.images.remove(sprite)
+            continue
+
+        custom_name = props.file_name.strip()
+        if custom_name:
+            base_name = f"{custom_name}_{udim_tile}" if udim_tile is not None else custom_name
+        else:
+            base_name = (
+                f"{output_name}_{udim_tile}_SpriteSheet"
+                if udim_tile is not None
+                else f"{output_name}_SpriteSheet"
             )
 
-    try:
-        sprite.pixels.foreach_set(pixels.ravel())
-        sprite.update()
-    except Exception as exc:
-        _report(report_fn, {"ERROR"}, f"Failed to write sprite sheet pixels\nError: {exc}")
-        if sprite.name in bpy.data.images:
-            bpy.data.images.remove(sprite)
-        return None
+        if total_sheets > 1:
+            base_name = f"{base_name}_{sheet_idx}"
 
-    base_name = props.file_name.strip() or f"{output_name}_SpriteSheet"
-    extension = props.sprite_sheet_image_format
-    path = os.path.join(directory, f"{base_name}.{extension}")
+        extension = props.sprite_sheet_image_format
+        path = os.path.join(directory, f"{base_name}.{extension}")
 
-    if os.path.exists(path) and not props.file_overwrite:
-        counter = 1
-        while os.path.exists(path):
-            path = os.path.join(directory, f"{base_name} ({counter}).{extension}")
-            counter += 1
+        if os.path.exists(path) and not props.file_overwrite:
+            counter = 1
+            while os.path.exists(path):
+                path = os.path.join(directory, f"{base_name} ({counter}).{extension}")
+                counter += 1
 
-    try:
-        sprite.filepath_raw = path
-        sprite.file_format = IMAGE_FORMAT_MAP[props.sprite_sheet_image_format]
-        sprite.save()
-        _report(report_fn, {"INFO"}, f"Sprite sheet saved: {path}")
-    except Exception as exc:
-        _report(report_fn, {"ERROR"}, f"Failed to save sprite sheet: {path}\nError: {exc}")
-        return None
+        try:
+            sprite.filepath_raw = path
+            sprite.file_format = IMAGE_FORMAT_MAP[props.sprite_sheet_image_format]
+            sprite.save()
+            last_saved_path = path
+            _report(report_fn, {"INFO"}, f"Sprite sheet saved: {path}")
+        except Exception as exc:
+            _report(report_fn, {"ERROR"}, f"Failed to save sprite sheet: {path}\nError: {exc}")
+            continue
 
-    if props.open_images:
-        _show_image_in_editor(sprite)
+        if props.open_images:
+            _show_image_in_editor(sprite)
 
     if props.open_output_directory:
         _open_output_directory(directory)
@@ -467,4 +633,4 @@ def process_images(images, props, output_name, report_fn=None):
     if props.clear_generated_images and props.source_type in {"VSE", "COMPOSITOR"}:
         _remove_temporary_images(selected_images)
 
-    return path
+    return last_saved_path

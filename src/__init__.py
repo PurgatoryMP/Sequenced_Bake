@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Sequenced Bake",
     "author": "Anthony OConnell",
-    "version": (1, 2, 0),
+    "version": (1, 2, 1),
     "blender": (5, 0, 0),
     "location": "View3D > Sidebar > Sequenced Bake",
     "description": "Tools for baking material sequences and generating sprite sheets",
@@ -49,6 +49,9 @@ from .sequenced_bake_core import (
     menu_func_add_sculpties,
 )
 from .sprite_sheet_creator import (
+    DirectoryImageItem,
+    SPRITESHEET_UL_ImageList,
+    SPRITESHEET_OT_ListAction,
     SpriteSheetCreatorPanel,
     SpriteSheetCreatorNode,
     SpriteSheetCreatorSocket,
@@ -58,6 +61,7 @@ from .sprite_sheet_creator import (
 )
 from bpy.types import AddonPreferences
 
+_node_menu_registered = False
 
 class SequencedBakeAddonProperties(AddonPreferences):
     bl_idname = __name__
@@ -66,20 +70,17 @@ class SequencedBakeAddonProperties(AddonPreferences):
         name="Website URL",
         description="The Blender Extensions website.",
         default="https://extensions.blender.org/add-ons/sequenced-bake/"
-    )
-    
+    )    
     github_url: bpy.props.StringProperty(
         name="GitHub URL",
         description="The GitHub repository for the Sequenced Bake add-on.",
         default="https://github.com/PurgatoryMP/Sequenced_Bake"
-    )
-    
+    )    
     discord_url: bpy.props.StringProperty(
         name="Discord URL",
         description="The Discord Community Server",
         default="https://discord.gg/uyaq8CQwRk"
     )
-
     def draw(self, context):
         layout = self.layout
         row = layout.row()
@@ -87,9 +88,6 @@ class SequencedBakeAddonProperties(AddonPreferences):
         row.operator("wm.url_open", text="Blender Extensions").url = self.website_url
         row.operator("wm.url_open", text="GitHub").url = self.github_url
         row.operator("wm.url_open", text="Discord Community").url = self.discord_url
-
-
-_node_menu_registered = False
 
 
 class NODE_MT_sequenced_bake_add_menu(bpy.types.Menu):
@@ -171,6 +169,9 @@ classes = (
     VIEW3D_MT_mesh_sculpties_add,
 
     # Sprite Sheet
+    DirectoryImageItem,
+    SPRITESHEET_UL_ImageList,
+    SPRITESHEET_OT_ListAction,
     SpriteSheetProperties,
     SpriteSheetCreatorSocket,
     SpriteSheetCreatorNode,
@@ -184,31 +185,24 @@ classes = (
 
 
 def register():
-    # Register all classes FIRST
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    # THEN create pointer properties
     bpy.types.Scene.sequenced_bake_props = bpy.props.PointerProperty(
         type=SequencedBakeProperties,
         name="Sequenced Bake Props",
     )
-
     bpy.types.Scene.sprite_sheet_props = bpy.props.PointerProperty(
         type=SpriteSheetProperties,
         name="Sprite Sheet Props",
     )
 
-    # Build and register the procedural node-group library.
     register_node_group_library()
-
-    # Append menus to Blender UI
     add_custom_node_category()
     bpy.types.VIEW3D_MT_mesh_add.append(menu_func_add_sculpties)
 
 
 def unregister():
-    # Remove custom UI menus
     bpy.types.VIEW3D_MT_mesh_add.remove(menu_func_add_sculpties)
     remove_custom_node_category()
     unregister_node_group_library()

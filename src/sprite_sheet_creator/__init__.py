@@ -16,9 +16,14 @@
 """
 
 
-from .properties import SpriteSheetProperties
-from .operators import OBJECT_OT_CreateSpriteSheet
+from .properties import DirectoryImageItem, SpriteSheetProperties
+from .operators import (
+    OBJECT_OT_CreateSpriteSheet,
+    SPRITESHEET_OT_AddImages,
+    SPRITESHEET_OT_ListAction,
+)
 from .ui import (
+    SPRITESHEET_UL_ImageList,
     SpriteSheetCreatorPanel,
     SpriteSheetCreatorVSEPanel,
     SpriteSheetCreatorNode,
@@ -26,8 +31,12 @@ from .ui import (
 )
 
 __all__ = (
+    "DirectoryImageItem",
     "SpriteSheetProperties",
     "OBJECT_OT_CreateSpriteSheet",
+    "SPRITESHEET_OT_AddImages",
+    "SPRITESHEET_OT_ListAction",
+    "SPRITESHEET_UL_ImageList",
     "SpriteSheetCreatorPanel",
     "SpriteSheetCreatorVSEPanel",
     "SpriteSheetCreatorNode",

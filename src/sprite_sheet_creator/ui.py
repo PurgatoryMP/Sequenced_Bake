@@ -15,8 +15,52 @@
 
 """
 
+import math
 import bpy
 from bpy.types import Panel, Node, NodeSocket
+
+
+class SPRITESHEET_UL_ImageList(bpy.types.UIList):
+    """UIList displaying images found in the selected directory (filtered by active UDIM if present)."""
+
+    def filter_items(self, context, data, propname):
+        items = getattr(data, propname)
+        has_udims = bool(getattr(data, "detected_udim_tiles", ""))
+        selected_udim = (
+            int(data.selected_udim_tile)
+            if has_udims and data.selected_udim_tile.isdigit()
+            else 0
+        )
+
+        flt_flags = []
+        for item in items:
+            if not has_udims or item.udim == selected_udim:
+                flt_flags.append(self.bitflag_filter_item)
+            else:
+                flt_flags.append(0)
+
+        return flt_flags, []
+
+    def draw_item(
+        self, context, layout, data, item, icon, active_data, active_propname, index
+    ):
+        if self.layout_type in {"DEFAULT", "COMPACT"}:
+            # Compute 1-based display index relative to the visible UDIM group
+            has_udims = bool(getattr(data, "detected_udim_tiles", ""))
+            if has_udims:
+                display_num = sum(
+                    1 for i in range(index + 1)
+                    if data.directory_images[i].udim == item.udim
+                )
+            else:
+                display_num = index + 1
+
+            row = layout.row(align=True)
+            row.label(text=f"{display_num}.", icon="IMAGE_DATA")
+            row.label(text=item.name)
+        elif self.layout_type == "GRID":
+            layout.alignment = "CENTER"
+            layout.label(text="", icon="IMAGE_DATA")
 
 
 class SpriteSheetCreatorSocket(NodeSocket):
@@ -61,7 +105,7 @@ class SpriteSheetCreatorNode(Node):
         scene = context.scene
         props = scene.sprite_sheet_props
 
-        # Source Section
+        # Source
         box = layout.box()
         col = box.column(align=True)
         col.label(text="Source:")
@@ -71,35 +115,105 @@ class SpriteSheetCreatorNode(Node):
             col.label(text="Image Directory:")
             col.prop(props, "directory")
 
-            sort_box = col.box()
-            sort_box.label(text="Directory Sorting:")
-            sort_box.prop(props, "use_alphabetical_sort")
+            has_udims = bool(props.detected_udim_tiles)
+            if has_udims:
+                col.separator(factor=0.5)
+                col.prop(props, "selected_udim_tile", text="UDIM Tile")
+                selected_udim = int(props.selected_udim_tile) if props.selected_udim_tile.isdigit() else 0
+                visible_count = sum(1 for item in props.directory_images if item.udim == selected_udim)
+            else:
+                visible_count = len(props.directory_images)
 
-            if props.use_alphabetical_sort:
-                sort_box.prop(props, "alphabetical_case_sensitive")
-                sort_box.prop(props, "alphabetical_reverse")
+            col.separator(factor=0.5)
+            header_row = col.row(align=True)
+            header_row.label(text=f"Images ({visible_count}):")
+            header_row.operator("spritesheet.list_action", text="", icon="FILE_REFRESH").action = "REFRESH"
+
+            list_row = col.row()
+            list_row.template_list(
+                "SPRITESHEET_UL_ImageList",
+                "",
+                props,
+                "directory_images",
+                props,
+                "directory_images_index",
+                rows=5,
+            )
+
+            btn_col = list_row.column(align=True)
+            btn_col.operator("spritesheet.add_images", text="", icon="ADD")
+            btn_col.operator("spritesheet.list_action", text="", icon="REMOVE").action = "REMOVE"
+            btn_col.separator(factor=0.5)
+            btn_col.operator("spritesheet.list_action", text="", icon="TRIA_UP_BAR").action = "TOP"
+            btn_col.operator("spritesheet.list_action", text="", icon="TRIA_UP").action = "UP"
+            btn_col.operator("spritesheet.list_action", text="", icon="TRIA_DOWN").action = "DOWN"
+            btn_col.operator("spritesheet.list_action", text="", icon="TRIA_DOWN_BAR").action = "BOTTOM"
+            btn_col.separator(factor=0.5)
+            btn_col.operator("spritesheet.list_action", text="", icon="ARROW_LEFTRIGHT").action = "REVERSE"
 
         if props.source_type == 'VSE':
             col.prop(props, "use_all_vse_channels")
             if not props.use_all_vse_channels:
                 col.prop(props, "vse_channel")
 
-        # Layout Section
+        # Layout
         box = layout.box()
         col = box.column(align=True)
         col.label(text="Sprite Sheet Properties:")
-        col.prop(props, "columns")
-        col.prop(props, "rows")
-        col.prop(props, "image_width")
-        col.prop(props, "image_height")
-        col.prop(props, "start_frame")
-        col.prop(props, "end_frame")
-        col.prop(props, "is_reversed")
+        
+        col.separator(factor=0.5)
+        
+        row = col.row(align=True)
+        row.enabled = not props.use_fixed_resolution
+        row.prop(props, "columns")
+        row.prop(props, "rows")
+        
+        col.separator(factor=0.5)
+        
+        row = col.row(align=True)
+        row.prop(props, "image_width")
+        row.prop(props, "image_height")
+        
+        col.separator(factor=0.5)
+        
+        row = col.row(align=True)
+        row.prop(props, "start_frame")
+        row.prop(props, "end_frame")
+        
+        col.separator(factor=0.5)
+        col.prop(props, "use_fixed_resolution")
 
-        # Output Section
+        if props.use_fixed_resolution:
+            col.separator(factor=0.5)
+            row = col.row(align=True)
+            row.prop(props, "output_width")
+            row.prop(props, "output_height")
+
+            cols_per_sheet = max(1, props.output_width // props.image_width)
+            rows_per_sheet = max(1, props.output_height // props.image_height)
+            out_w = props.output_width
+            out_h = props.output_height
+        else:
+            cols_per_sheet = props.columns
+            rows_per_sheet = props.rows
+            out_w = props.columns * props.image_width
+            out_h = props.rows * props.image_height
+
+        cells_per_sheet = max(1, cols_per_sheet * rows_per_sheet)
+        total_frames = max(0, props.end_frame - props.start_frame + 1)
+        sheet_count = math.ceil(total_frames / cells_per_sheet) if total_frames > 0 else 0
+
+        col.separator(factor=0.5)
+        col.label(text=f"Output Resolution: {out_w} x {out_h} px")
+        col.label(text=f"Sprite Sheets to Create: {sheet_count}")
+ 
+        # Output
         box = layout.box()
         col = box.column(align=True)
         col.label(text="Output File Name:")
+        
+        col.separator(factor=1.0)
+        
         row = col.row(align=True)
         row.prop(props, "file_name")
         row.prop(props, "sprite_sheet_image_format")
@@ -112,9 +226,10 @@ class SpriteSheetCreatorNode(Node):
             col.label(text="Compositor Output Directory:")
             col.prop(props, "compositor_output_path")
 
+        col.separator(factor=1.0)
         col.prop(props, "file_overwrite")
 
-        # Options Section
+        # Options
         box = layout.box()
         col = box.column(align=True)
         col.prop(props, "sprite_sheet_is_alpha")
@@ -122,7 +237,7 @@ class SpriteSheetCreatorNode(Node):
         col.prop(props, "open_output_directory")
         col.prop(props, "clear_generated_images")
 
-        # Execute Section
+        # Execute
         box = layout.box()
         col = box.column(align=True)
         col.operator("object.create_sprite_sheet", text="Generate Sprite Sheet")

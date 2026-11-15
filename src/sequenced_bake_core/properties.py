@@ -450,7 +450,12 @@ class SequencedBakeProperties(PropertyGroup):
     ui_show_output: bpy.props.BoolProperty(
         default=True
     )
-
+    
+    sequenced_bake_prefix: bpy.props.StringProperty(
+        name="",
+        default="",
+        description="Optional prefix added to the beginning of baked filenames"
+    )
     sequenced_bake_output_path: bpy.props.StringProperty(
         name="",
         default="",
@@ -581,14 +586,14 @@ class SequencedBakeProperties(PropertyGroup):
     def update_normal_map_preset(self, context):
         preset = self.normal_map_preset
 
-        # --- OpenGL family (+Y) ---
+        # OpenGL family (+Y)
         if preset in {'OPENGL', 'BLENDER', 'UNITY', 'SUBSTANCE'}:
             self.normal_map_space = 'TANGENT'
             self.normal_map_red_channel = 'POS_X'
             self.normal_map_green_channel = 'POS_Y'
             self.normal_map_blue_channel = 'POS_Z'
 
-        # --- DirectX family (-Y) ---
+        # DirectX family (-Y)
         elif preset in {'DIRECTX', 'UNREAL'}:
             self.normal_map_space = 'TANGENT'
             self.normal_map_red_channel = 'POS_X'
@@ -695,6 +700,8 @@ class SequencedBakeProperties(PropertyGroup):
                     "Metalness.",
         default=False
     )
+    
+    # Sculpt map
     sequenced_bake_sculpt: bpy.props.BoolProperty(
         name="Sculpt Map",
         description="Enable to bake a Second Life-compatible sculpt map for the active mesh object",
@@ -705,6 +712,14 @@ class SequencedBakeProperties(PropertyGroup):
         description="Optional reference object (e.g., a cube) to use as a stable bounding box across animation frames",
         type=bpy.types.Object
     )
+    
+    # Color ID
+    sequenced_bake_color_id: bpy.props.BoolProperty(
+        name="Color ID",
+        description="Enable to bake a color ID map based on loose mesh geometry",
+        default=False
+    ) 
+    
     # Lighting options.
     diffuse_lighting_direct: bpy.props.BoolProperty(
         name="Direct",

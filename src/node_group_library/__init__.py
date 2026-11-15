@@ -12,7 +12,7 @@
 
     You should have received a copy of the GNU General Public License
     along with Sequence Bake. If not, see <http://www.gnu.org/licenses/>.
-
+    
 """
 
 import sys
@@ -110,8 +110,8 @@ def _discover_group_factories():
         try:
             if full_module_name in sys.modules:
                 module = importlib.reload(
-                sys.modules[full_module_name]
-            )
+                    sys.modules[full_module_name]
+                )
             else:
                 module = importlib.import_module(full_module_name)
 
@@ -180,24 +180,15 @@ def _initialize_node_groups():
                     f"but received '{group.name}'."
                 )
 
-            _GROUPS[group_name] = group
+            _GROUPS[group_name] = factory
 
             _log(f"READY: {group_name}")
 
         except Exception as exc:
-            error_message = (
-                f"{type(exc).__name__}: {exc}"
-            )
-
+            error_message = f"{type(exc).__name__}: {exc}"
             _DISCOVERY_ERRORS[module_name] = error_message
-
-            _log(
-                f"FAILED to initialize '{group_name}' "
-                f"from {module_name}.py"
-            )
-
+            _log(f"FAILED to initialize '{group_name}' from {module_name}.py")
             _log(f"Exception: {error_message}")
-
             traceback.print_exc()
 
     _log(
@@ -283,21 +274,49 @@ class SequencedBakeNodeGroupOperator(Operator):
         )
 
     def execute(self, context):
-        group = bpy.data.node_groups.get(self.group_name)
+        """Insert the requested node group into the active shader tree."""
 
-        if group is None:
+        factory = _GROUPS.get(self.group_name)
+
+        if factory is None:
+            available_groups = ", ".join(sorted(_GROUPS.keys()))
+
             self.report(
                 {"ERROR"},
-                f"Node group '{self.group_name}' was not found.",
+                f"Node group '{self.group_name}' was not found. "
+                f"Available groups: {available_groups or 'None'}"
             )
+
+            _log(
+                f"INSERT FAILED: '{self.group_name}' is not registered. "
+                f"Available groups: {available_groups or 'None'}"
+            )
+
             return {"CANCELLED"}
 
         try:
-            tree = context.space_data.edit_tree
+            space = context.space_data
+            tree = getattr(space, "edit_tree", None)
+
+            if tree is None:
+                raise RuntimeError("No active node tree was found.")
+
+            if tree.bl_idname != "ShaderNodeTree":
+                raise RuntimeError("The active node tree is not a Shader Editor tree.")
+
+            group = bpy.data.node_groups.get(self.group_name)
+            if group is None:
+                group = factory()
+
+            if bpy.data.node_groups.get(group.name) is not group:
+                raise RuntimeError(
+                    f"Registered node group '{self.group_name}' "
+                    "no longer exists in Blender."
+                )
 
             node = tree.nodes.new("ShaderNodeGroup")
             node.node_tree = group
-            node.location = context.space_data.cursor_location
+            node.location = space.cursor_location
 
             for existing_node in tree.nodes:
                 existing_node.select = False
@@ -305,13 +324,23 @@ class SequencedBakeNodeGroupOperator(Operator):
             node.select = True
             tree.nodes.active = node
 
+            _log(f"INSERTED: '{self.group_name}' into '{tree.name}'.")
+
             return {"FINISHED"}
 
         except Exception as exc:
             self.report(
                 {"ERROR"},
-                f"Could not insert '{self.group_name}': {exc}",
+                f"Could not insert '{self.group_name}': {exc}"
             )
+
+            _log(
+                f"INSERT FAILED: '{self.group_name}': "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+            traceback.print_exc()
+
             return {"CANCELLED"}
 
 

@@ -29,8 +29,9 @@ from .processing import (
     connect_occlusion_node,
     create_image_texture,
     restore_material_state,
+    setup_color_id_materials,
+    restore_color_id_materials,
 )
-
 
 
 class SEQUENCED_BAKE_OT_udim_add(bpy.types.Operator):
@@ -48,7 +49,7 @@ class SEQUENCED_BAKE_OT_udim_add(bpy.types.Operator):
             for tile in props.udim_tiles
         }
 
-        # Find the first available valid UDIM index.
+        # Get available valid UDIM index.
         tile_number = 1001
 
         while tile_number in existing_tiles and tile_number <= 2000:
@@ -381,6 +382,7 @@ class SequencedBakeOperator(bpy.types.Operator):
             "METALLIC": props.sequenced_bake_metallic,
             "OCCLUSION": props.sequenced_bake_occlusion,
             "SCULPT": props.sequenced_bake_sculpt,
+            "COLOR_ID": props.sequenced_bake_color_id,
         }
 
         if scene.render.engine != "CYCLES":
@@ -436,20 +438,24 @@ class SequencedBakeOperator(bpy.types.Operator):
         self._output_dirs.clear()
 
         root = bpy.path.abspath(self._props.sequenced_bake_output_path)
-        for material in self._materials:
-            for bake_type, enabled in self._bake_map.items():
-                if not enabled:
-                    continue
-                mat_name = material.name if material else "NoMaterial"
-                output_dir = os.path.join(
-                    root,
-                    f"{self._obj.name}_{mat_name}_{bake_type}",
-                )
+        for bake_type, enabled in self._bake_map.items():
+            if not enabled:
+                continue
+
+            # Object-wide bake (Bypass per-material duplication)
+            if bake_type == "COLOR_ID":
+                mat_name = "ObjectWide"
+                output_dir = os.path.join(root, f"{self._obj.name}_{bake_type}")
                 self._output_dirs[(mat_name, bake_type)] = output_dir
-                self._tasks.extend(
-                    (material, bake_type, frame)
-                    for frame in self._frames
-                )
+                self._tasks.extend((None, bake_type, frame) for frame in self._frames)
+                continue
+
+            # Per-material bakes
+            for material in self._materials:
+                mat_name = material.name if material else "NoMaterial"
+                output_dir = os.path.join(root, f"{self._obj.name}_{mat_name}_{bake_type}")
+                self._output_dirs[(mat_name, bake_type)] = output_dir
+                self._tasks.extend((material, bake_type, frame) for frame in self._frames)
 
     def modal(self, context, event):
         """Process one bake task for each timer event."""
@@ -481,6 +487,7 @@ class SequencedBakeOperator(bpy.types.Operator):
         material, bake_type, frame = self._tasks[self._task_index]
         self._task_index += 1
         task_start = time.perf_counter()
+        self._active_color_id_state = None
 
         self._props.bake_current_material = material.name if material else "None"
         self._props.bake_current_type = bake_type
@@ -495,70 +502,94 @@ class SequencedBakeOperator(bpy.types.Operator):
 
         try:
             if material:
-                if bake_type == "METALLIC":
-                    material_state = connect_metallic_node(material)
-                elif bake_type == "OCCLUSION":
-                    material_state = connect_occlusion_node(material)
+                try:
+                    if bake_type == "METALLIC":
+                        material_state = connect_metallic_node(material)
+                    elif bake_type == "OCCLUSION":
+                        material_state = connect_occlusion_node(material)
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to connect material nodes for '{material.name}': {exc}") from exc
 
             colorspace = self._props.colorspace
-            if bake_type in {"NORMAL", "ROUGHNESS", "METALLIC", "OCCLUSION"}:
+            if bake_type in {"NORMAL", "ROUGHNESS", "METALLIC", "OCCLUSION", "COLOR_ID"}:
                 colorspace = "Non-Color"
 
             width = self._props.sequenced_bake_width
             height = self._props.sequenced_bake_height
 
-            image_node, image = create_image_texture(
-                material=material,
-                name=f"{self._obj.name}_{material.name if material else 'NoMat'}_{bake_type}_{frame}",
-                width=width,
-                height=height,
-                alpha=self._props.sequence_is_alpha,
-                float_buffer=self._props.sequence_use_float,
-                interpolation=self._props.interpolation,
-                projection=self._props.projection,
-                extension=self._props.extension,
-                colorspace=colorspace,
-                file_format=self._props.sequenced_bake_image_format,
-                projection_blend=self._props.projection_blend,
-                image_source=self._props.image_source,
-                image_alpha_mode=self._props.image_alpha_mode,
-                udim_tiles=self._props.udim_tiles,
-            )
+            try:
+                image_node, image = create_image_texture(
+                    material=material,
+                    name=f"{self._obj.name}_{material.name if material else 'ObjectWide'}_{bake_type}_{frame}",
+                    width=width,
+                    height=height,
+                    alpha=self._props.sequence_is_alpha,
+                    float_buffer=self._props.sequence_use_float,
+                    interpolation=self._props.interpolation,
+                    projection=self._props.projection,
+                    extension=self._props.extension,
+                    colorspace=colorspace,
+                    file_format=self._props.sequenced_bake_image_format,
+                    projection_blend=self._props.projection_blend,
+                    image_source=self._props.image_source,
+                    image_alpha_mode=self._props.image_alpha_mode,
+                    udim_tiles=self._props.udim_tiles,
+                )
+            except Exception as exc:
+                raise RuntimeError(f"Failed to create image texture for {bake_type} (Frame {frame}): {exc}") from exc
+
             self._generated_images.append(image)
             self._active_material = material
             self._active_material_state = material_state
             self._active_image_node = image_node
             self._active_image = image
-
-            mat_name = material.name if material else "NoMaterial"
-            output_dir = self._output_dirs[(mat_name, bake_type)]
-            os.makedirs(output_dir, exist_ok=True)
-
-            bake_frame(
-                bake_type=bake_type,
-                props=self._props,
-                frame=frame,
-                obj=self._obj,
-                mat=material,
-                image_node=image_node,
-                image=image,
-                output_dir=output_dir,
-            )
-        finally:
-            if image_node is not None and material and material.node_tree:
+            
+            if bake_type == "COLOR_ID":
                 try:
-                    if image_node.name in material.node_tree.nodes:
-                        material.node_tree.nodes.remove(image_node)
-                except (ReferenceError, RuntimeError) as exc:
-                    print(f"[Sequenced Bake] Failed to remove temporary image node: {exc}")
+                    self._active_color_id_state = setup_color_id_materials(self._obj, image)
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to setup Color ID materials for {self._obj.name}: {exc}") from exc
 
-            if material_state is not None and material:
+            mat_name = material.name if material else "ObjectWide"
+            
+            try:
+                output_dir = self._output_dirs[(mat_name, bake_type)]
+            except KeyError as exc:
+                available_keys = list(self._output_dirs.keys())
+                raise KeyError(f"Missing output directory for key '{(mat_name, bake_type)}'. Available: {available_keys}") from exc
+
+            try:
+                os.makedirs(output_dir, exist_ok=True)
+            except OSError as exc:
+                raise OSError(f"Failed to create directory '{output_dir}': {exc}") from exc
+
+            try:
+                bake_frame(
+                    bake_type=bake_type,
+                    props=self._props,
+                    frame=frame,
+                    obj=self._obj,
+                    mat=material,
+                    image_node=image_node,
+                    image=image,
+                    output_dir=output_dir,
+                )
+            except Exception as exc:
+                raise RuntimeError(f"Failed to bake {bake_type} for '{mat_name}' (Frame {frame}): {exc}") from exc
+
+        finally:
+            if getattr(self, "_active_color_id_state", None):
+                try:
+                    restore_color_id_materials(self._obj, self._active_color_id_state)
+                except Exception as exc:
+                    print(f"[Sequenced Bake] Failed to restore Color ID materials: {exc}")
+                self._active_color_id_state = None
+
+            if image_node is not None and material and getattr(material, "node_tree", None):
                 try:
                     restore_material_state(material, material_state)
                 except Exception as exc:
-                    print(
-                        f"[Sequenced Bake] Failed to restore material '{material.name}': {exc}"
-                    )
+                    print(f"[Sequenced Bake] Failed to restore material '{material.name}': {exc}")
 
             self._active_material = None
             self._active_material_state = None
@@ -631,19 +662,18 @@ class SequencedBakeOperator(bpy.types.Operator):
 
     def _cancel(self, context, failed=False):
         """Cancel the bake operation and restore temporary state."""
-        if self._active_material and self._active_material_state:
+        if getattr(self, "_active_color_id_state", None):
             try:
-                restore_material_state(
-                    self._active_material,
-                    self._active_material_state,
-                )
+                restore_color_id_materials(self._obj, self._active_color_id_state)
             except Exception as exc:
-                print(f"[Sequenced Bake] Failed to restore active material: {exc}")
-
-        self._remove_timer(context)
-        clear_generated_textures(self._props, self._generated_images)
-        self._props.bake_status = "Failed" if failed else "Cancelled"
-        self.report(
-            {"ERROR" if failed else "WARNING"},
-            "Sequenced Bake failed" if failed else "Sequenced Bake cancelled",
-        )
+                print(f"[Sequenced Bake] Failed to restore Color ID materials: {exc}")
+            self._active_color_id_state = None
+            
+        if self._active_material and self._active_material_state:
+            self._remove_timer(context)
+            clear_generated_textures(self._props, self._generated_images)
+            self._props.bake_status = "Failed" if failed else "Cancelled"
+            self.report(
+                {"ERROR" if failed else "WARNING"},
+                "Sequenced Bake failed" if failed else "Sequenced Bake cancelled",
+            )
