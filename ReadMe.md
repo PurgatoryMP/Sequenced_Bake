@@ -1,67 +1,43 @@
 # Sequenced Bake
 
-## Overview
+This extension is for baking animated materials and geometry into frame-by-frame texture sequences.
 
-**Sequenced Bake** is a Blender add-on module designed for high-throughput, frame-by-frame material baking across animated sequences.
+It provides a non-blocking, task-driven baking system that processes materials, bake types, and animation frames.
 
-It provides a **non-blocking, task-driven baking pipeline** that processes materials, bake passes, and frame ranges in a structured queue—allowing complex baking operations to run while maintaining full UI responsiveness.
+It is designed for:
+- Animated and procedural materials
+- PBR texture sequences
+- Game asset workflows
+- VFX and motion graphics
+- Flipbook textures
+- High-volume batch baking
+- Second Life sculpt maps
+- Color ID and texture atlas generation
+- Procedural material development
 
-The system integrates directly with Blender’s material node workflows, supports advanced bake configurations, and includes real-time diagnostics such as progress tracking, FPS, and estimated completion time.
-
----
-
-## Architecture
-
-The Sequenced Bake module is structured into a modular pipeline:
-
-- `operator.py` — Modal task scheduler and execution engine  
-- `processing.py` — Core baking logic and node manipulation utilities  
-- `properties.py` — Full configuration system and user-defined bake settings  
-- `ui.py` — UI panels and node-based interface  
-
-This separation allows for clean extensibility and isolates bake logic from UI and state management.
+![Sequenced Bake 3D View](https://raw.githubusercontent.com/PurgatoryMP/Sequenced_Bake/refs/heads/main/Screenshots/SequencedBake3DView121.PNG)
 
 ---
 
-## Core Features
+# Core Features
 
-### Sequenced Bake Engine
-- Modal, timer-driven execution (non-blocking)
-- Task queue built from:
-  - Materials (active or all)
-  - Enabled bake types
-  - Frame range
-- Per-task execution model:  
-  `(material, bake_type, frame)`
-- **Total tasks = Materials × Bake Types × Frames**
-- Maintains UI responsiveness during long bake operations
+### Sequenced Material Baking
 
----
-
-### Multi-Material & Batch Baking
-- Bake:
-  - Active material only  
-  - **All materials on an object**
-- Automatically iterates through material slots
-- Organizes output per material and bake type
-
----
-
-### Frame Sequencing
-- Uses scene frame range (`frame_start → frame_end`)
-- Automatically steps and evaluates scene per frame
-- Supports animated shaders, drivers, and keyframed node values
-
----
+- Bake an entire frame range automatically.
+- Process one or multiple materials.
+- Supports multiple bake types per frame.
+- Supports animated shaders, drivers, and keyframed node values.
+- Runs through a modal task queue to keep Blender responsive.
+- Provides live progress, FPS, current task, and ETA.
+- Supports customizable output filename prefixes.
+- Automatically organizes generated texture sequences.
 
 ### Supported Bake Types
 
-Includes all major Cycles bake passes plus extended workflows:
-
-- Normal (with full swizzle + space control)
+- Normal
 - Roughness
 - Glossy
-- Diffuse (with lighting contribution control)
+- Diffuse
 - Transmission
 - Emission
 - Ambient Occlusion
@@ -69,492 +45,318 @@ Includes all major Cycles bake passes plus extended workflows:
 - Position
 - UV
 - Environment
-- Combined (configurable contributions)
-- Metallic *(custom node routing)*
-- ORM (Occlusion / Roughness / Metallic packed output)
-- Sculpt *(beta — UV -> Object-space position bake)*
+- Combined
+- Metallic
+- ORM
+- Sculpt
+- Color ID
+
+### Advanced Baking
+
+- Selected-to-active baking
+- Cage and ray-distance controls
+- Custom Metallic baking
+- ORM packed output:
+  - Red = AO
+  - Green = Roughness
+  - Blue = Metallic
+- Color ID baking with automatic color assignment for disconnected mesh islands
+- Object-wide Color ID generation
+- Configurable image resolution and formats
+- 8-bit and 32-bit image support
+- Color-management controls
+- Automatic bake-target setup
+- Custom output filename prefixes
+- Optional cleanup of generated images
 
 ---
 
-### Advanced Node Injection (Non-Destructive)
+# Procedural Node Group Library
 
-Sequenced Bake dynamically modifies material node trees when required:
+Sequenced Bake includes a collection of procedural Shader Editor node groups designed to accelerate material creation and procedural workflows.
 
-- **Metallic Bake**
-  - Temporarily reroutes Metallic → Material Output
+Available node groups include:
 
-- **ORM Bake**
-  - Constructs a temporary node graph:
-    - AO → Red
-    - Roughness → Green
-    - Metallic → Blue
-  - Injects a temporary Principled BSDF for emission-based baking
-  - Preserves:
-    - Alpha connections
-    - Normal inputs
+- CrossWalk Decal
+- Crack Decal
+- Stain Decal
+- Water Material
+- Concrete Material
+- Curvature Map
+- Magma Material
 
----
+### Node Group Features
 
-## Sculpt Maps in v1.1.8
-
-The Sculpt Map system generates a **normalized object-space position map** by projecting evaluated mesh geometry into UV space and encoding the resulting 3D positions into an RGB image.
-
-It is designed for **Second Life sculpt maps** and for stable sculpt-map generation across animated sequences.
-
-## How It Works
-
-### 1. Evaluated Mesh Sampling
-
-- Uses Blender's evaluated mesh, including modifiers and animation.
-- Extracts the evaluated mesh geometry and active UV data.
-- Supports arbitrary mesh topology rather than requiring a specific subdivision layout.
-
-### 2. UV-Space Rasterization
-
-The mesh is converted into triangles in UV space.
-
-For each sculpt-map pixel:
-
-- The corresponding UV coordinate is calculated.
-- UV triangles are tested for pixel coverage.
-- Barycentric coordinates are calculated for covered pixels.
-- The 3D vertex positions are interpolated across the triangle.
-
-This produces a continuous object-space position map across the UV surface.
-
-### 3. Position Encoding
-
-Interpolated object-space positions are normalized into the `0–1` range and encoded into the RGB channels:
-
-- **R = X**
-- **G = Y**
-- **B = Z**
-
-The resulting image contains the object-space position of the mesh surface at each UV location.
-
-### 4. Stable Sculpt Bounds
-
-Sculpt-map normalization can use a dedicated **Bounding Object**.
-
-When a bounding object is specified:
-
-- The bounding object's bounds are used as the normalization reference.
-- The same bounds are maintained across animation frames.
-- Deforming geometry does not cause the sculpt-map coordinate range to change.
-
-This helps prevent frame-to-frame scaling, shifting, or distortion in animated sculpt-map sequences.
-
-If no bounding object is specified, the bounds are calculated from the evaluated mesh.
-
-## Sculpt Map Resolution
-
-The sculpt-map resolution should generally match the density and proportions of the mesh.
-
-| Mesh Density | Recommended Resolution |
-|---|---|
-| Very Low (≤10 tris) | 16×16 |
-| Low (10–100 tris) | 16×16 – 32×32 |
-| Medium (100–2k tris) | 32×32 – 64×64 |
-| High (2k–10k tris) | 64×64 – 128×128 |
-| Very High (10k+ tris) | 128×128 |
-
-Non-square resolutions can also be useful when the UV layout has significantly different density along each axis.
-
-For example:
-
-- `32×128`
-- `64×128`
-- `128×64`
-
-This can be useful for long or highly directional meshes such as railings, strips, and other elongated assets.
-
-## Key Features
-
-- Evaluated mesh support
-- Modifier and animation support
-- UV-based triangle rasterization
-- Barycentric position interpolation
-- Object-space position encoding
-- Stable animation-frame normalization
-- Optional Bounding Object for consistent bounds
-- Support for arbitrary mesh topology
-- Improved handling of uncovered UV pixels
-- Designed for Second Life sculpt-map workflows
-
-## Output
-
-The Sculpt Map produces an RGB position map where:
-
-- **Red** represents normalized X position.
-- **Green** represents normalized Y position.
-- **Blue** represents normalized Z position.
-
-The resulting image can be used for:
-
-- Second Life sculpt maps
-- Displacement reconstruction
-- Procedural mesh workflows
-- Animated mesh baking
-- Position-map based reconstruction pipelines
-
-## Limitations
-
-- Requires a suitable UV layout for accurate results.
-- Overlapping UVs can produce conflicting pixel data.
-- UV seams and gaps may result in uncovered pixels.
-- Sculpt-map resolution should be appropriate for the mesh's topology and UV density.
-- For animated meshes, a **Bounding Object** is recommended when consistent frame-to-frame normalization is required.
+- Accessible through the Shader Editor Add menu.
+- Automatically creates node groups when needed.
+- Organized under the Sequenced Bake node-group library.
+- Designed for reusable procedural material workflows.
+- Includes specialized material and surface-detail generation tools.
 
 ---
 
-### Image Generation Pipeline
-- Generates a new image per task (material × bake type × frame)
-- Creates image textures dynamically during execution
-- Configurable:
-  - Resolution (1–8192)
-  - Bit depth (8-bit / 32-bit float)
-  - Alpha support
-  - Color space
-- Automatically assigns and activates bake targets
-- Cleans up unused image datablocks after completion (optional)
+# Sculpt Map
+
+The Sculpt Map system generates **object-space position maps** from mesh geometry and UVs.
+
+![Sculpt Map Menu](https://raw.githubusercontent.com/PurgatoryMP/Sequenced_Bake/refs/heads/main/Screenshots/AddMenuSculptsMenu.png)
+
+![Sculpt Map Generation](https://raw.githubusercontent.com/PurgatoryMP/Sequenced_Bake/refs/heads/main/Screenshots/SculptMapGenerationRoundCube.PNG)
+
+[![Watch the Sculpt Map workflow](https://img.youtube.com/vi/tJhFkORsI-U/hqdefault.jpg)](https://www.youtube.com/watch?v=tJhFkORsI-U)
+
+The system is designed for **Second Life sculpt maps** and supports animated geometry with stable frame-to-frame normalization.
+
+### Sculpt Mesh Generator
+
+A built-in **Add Sculpt Mesh** tool provides parametric meshes for sculpt-map creation, including:
+
+- Grid
+- Sphere
+- Cylinder
+- Torus
+- Capsule
+- Cube
+- Round Cube
+- Helix
+- Stairs
+- Bolt
+- Nut
+
+Sculpt map images must be (`4 times`) the size of the objects subdivisions.
+
+Example: 
+- A 16x16 plane must have a 64x64 sculpt map image to retain sharp edges.
+
+Generated sculpt meshes include automatic UV mapping and a **Bounding Object** for consistent normalization.
+
+### Sculpt Map Features
+
+- Uses evaluated mesh geometry.
+- Supports modifiers, shape keys, and animation.
+- Rasterizes geometry through UV space.
+- Uses barycentric interpolation for position sampling.
+- Encodes X/Y/Z position into RGB.
+- Supports resolutions up to **128×128** for sculpt-map workflows.
+- Supports non-square resolutions.
+- Includes edge filling to reduce filtering and seam artifacts.
+- Stable normalization helps prevent animation frames from shifting or scaling.
 
 ---
 
-### Selected-to-Active Baking
-- Full support for projection baking workflows:
-  - Cage object support
-  - Ray distance control
-  - Extrusion settings
+# User Interface
 
----
+Sequenced Bake is available through:
 
-### Color Management Control
-Per-bake override of Blender color pipeline:
+**3D View → Sidebar → Sequenced Bake**
 
-- Display Device
-- View Transform
-- Look
-- Exposure / Gamma
-- Sequencer color space
+The interface provides access to:
 
-Ensures consistent output for pipelines requiring strict color fidelity.
-
----
-
-### Real-Time Diagnostics
-
-Live bake feedback includes:
-
-- Progress (0.0 → 1.0)
-- Current material
-- Current bake type
-- Frame index tracking
-- Effective FPS (throughput)
-- Estimated time remaining (ETA)
-
----
-
-### Performance Model
-
-- Incremental processing via Blender modal timer
-- Avoids UI freezing during large batch jobs
-- Tracks per-task execution time for accurate ETA prediction
-
----
-
-## User Interface
-
-### 3D View Panel (N-Panel)
-
-Located under:  
-**`View3D → Sidebar → Sequenced Bake`**
-
-Includes:
-
-- Material Manager (slot-based workflow)
-- Frame range controls
+- Materials
+- Frame ranges
 - Image settings
-- Bake type selection
+- Bake types
 - Color management
+- Filename prefixes
 - Bake controls
-- Real-time diagnostics panel (progress, FPS, ETA, current task)
+- Progress and diagnostics
+
+A **Sequenced Bake Node** is also available in the Shader Editor for node-based workflows.
 
 ---
 
-### Shader Editor Node
+# Basic Workflow
 
-A fully functional **Sequenced Bake Node** is available:
+1. Select an object with a material.
+2. Set the render engine to **Cycles**.
+3. Open the **Sequenced Bake** panel or node.
+4. Choose the frame range and bake types.
+5. Set the output location and image settings.
+6. Configure optional filename prefixes.
+7. Click **Bake Material Sequence**.
 
-- Mirrors panel functionality
-- Allows node-based workflow integration
-- Useful for material-centric pipelines
-
----
-
-## Usage
-
-### Basic Workflow
-
-1. Select an object with a material  
-2. Ensure **Cycles** is the active render engine  
-3. Open the **Sequenced Bake panel** or node  
-4. Configure:
-   - Output directory
-   - Frame range
-   - Image settings
-   - Bake types  
-5. Click **“Bake Material Sequence”**
-
-The system will:
-
-- Build a task queue  
-- Process each bake incrementally  
-- Save outputs per material / type / frame  
+The add-on processes the sequence and saves the resulting textures by material and bake type.
 
 ---
 
-## Output Structure
+# Output
 
-Baked images are organized as:
+Baked sequences are organized automatically:
 
+```text
 <output_path>/
-<Object><Material><BakeType>/
-1.png
-2.png
-3.png
+└── <Object><Material><BakeType>/
+    ├── 1.png
+    ├── 2.png
+    └── 3.png
+```
 
+Custom filename prefixes can be used to identify and organize generated sequences.
 
----
+![Bake Output Directories](https://raw.githubusercontent.com/PurgatoryMP/Sequenced_Bake/refs/heads/main/Screenshots/BakeOutputDirectories.PNG)
 
-## Configuration Highlights
+![Material Sequence](https://raw.githubusercontent.com/PurgatoryMP/Sequenced_Bake/refs/heads/main/Screenshots/MaterialSequenceRoughness.PNG)
 
-- Resolution up to 8K  
-- Multiple image formats (PNG, EXR, TIFF, etc.)  
-- Normal map presets:
-  - OpenGL
-  - DirectX
-  - Unity / Unreal / Substance  
-- Texture sampling:
-  - Interpolation
-  - Projection
-  - Extension modes  
-- Optional automatic cleanup of generated textures  
+UDIM Tile workflows are also supported:
 
----
+![UDIM Tiles](https://raw.githubusercontent.com/PurgatoryMP/Sequenced_Bake/refs/heads/main/Screenshots/UDIM_Tiles.png)
 
-## Requirements
-
-- Blender (Cycles render engine required)
-
----
-
-## Notes
-
-- Designed for **animation baking pipelines**, not single-frame baking  
-- Optimized for:
-  - Game asset workflows  
-  - Shader-driven animation  
-  - Procedural material baking  
-- Node graph modifications are **fully reversible and non-destructive**
-
----
-
-## Pipeline / Use Cases
-
-### Game Development (Real-Time Engines)
-
-Sequenced Bake supports asset pipelines targeting Unity, Unreal Engine, and custom runtimes.
-
-- Bake shader-driven animation into **image sequences**
-- Generate full PBR map sets across frames
-- Replace runtime shader cost with pre-baked textures
-
----
-
-### Shader-to-Texture Conversion
-
-- Convert procedural materials into static or animated textures  
-- Preserve lighting contributions and emission data  
-- Useful for asset export and lookdev finalization  
-
----
-
-### VFX and Motion Graphics
-
-- Bake animated effects (dissolves, energy flows, scans)  
-- Generate frame-accurate image sequences for compositing and sprites  
-
----
-
-### Procedural Material Caching
-
-- Cache time-dependent shaders into textures  
-- Eliminate runtime evaluation cost  
-- Enable deterministic playback  
-
----
-
-### High-Volume Batch Processing
-
-Designed to handle:
-
-- Hundreds of frames  
-- Multiple materials  
-- Multiple bake passes per material  
-
----
-
-### Pipeline Integration
-
-- Deterministic output structure  
-- Consistent naming conventions  
-- Color management control for pipeline compliance  
+![UDIM Tiles Output](https://raw.githubusercontent.com/PurgatoryMP/Sequenced_Bake/refs/heads/main/Screenshots/UDIM_Tiles2.png)
 
 ---
 
 # Sprite Sheet Creator
 
-## Overview
-
-**Sprite Sheet Creator** is a Blender add-on module designed to convert frame-based image data into structured, production-ready sprite sheets.
-
-This module is designed as the second stage of the pipeline:
+**Sprite Sheet Creator** is the companion module for converting image sequences into sprite sheets and flipbook atlases.
 
 **Bake → Image Sequence → Sprite Sheet**
 
-It supports multiple input sources—including image directories, the Video Sequence Editor (VSE), and Compositor outputs—and assembles them into optimized sprite sheets.
+It supports multiple image sources:
 
-Supports both **immediate and modal (non-blocking) execution**, depending on the source type.
+- Image directories
+- Blender's Video Sequence Editor (VSE)
+- Compositor output
 
----
+![Sprite Sheet Creator](https://raw.githubusercontent.com/PurgatoryMP/Sequenced_Bake/refs/heads/main/Screenshots/SpriteSheetCreator3DView121.PNG)
 
-## Architecture
+### Image Sequence Management
 
-- `operators.py` — Execution logic and batch processing  
-- `processing.py` — Image loading and sprite assembly  
-- `properties.py` — Configuration system  
-- `ui.py` — Unified interface  
+- Automatic directory scanning.
+- Automatic image sequence detection.
+- Natural filename sorting.
+- Manual image selection and list management.
+- Add and remove individual images.
+- Manually reorder images.
+- Move images to the beginning or end of the sequence.
+- Reverse image ordering.
+- Refresh directory contents.
+- Automatic UDIM tile detection and grouping.
+- Individual image sequence management for each detected UDIM tile.
 
----
+### Sprite Sheet Generation
 
-## Core Features
+- Configurable columns and rows.
+- Automatic frame placement.
+- Frame rescaling to cell size.
+- Configurable cell dimensions.
+- Fixed-resolution output.
+- Automatic calculation of available sprite sheet cells.
+- Automatic splitting of excess frames across multiple sprite sheets.
+- Separate sprite sheet generation for individual UDIM tiles.
+- Configurable output dimensions.
+- Multiple output formats.
+- Custom output filenames.
+- Flexible output paths.
+- Alpha channel support.
+- Automatic naming and output organization.
+- NumPy-backed image processing.
 
-### Multi-Source Frame Input
+### Fixed-Resolution Output
 
-#### Image Sequence (Directory)
-- Load frames from a folder  
-- Detect subdirectories for batch processing  
-- Sorting and frame range control  
+Sprite Sheet Creator supports both traditional grid-based layouts and fixed-resolution sprite sheets.
 
-#### Video Sequence Editor (VSE)
-- Renders frames from the VSE timeline  
-- Supports single or multiple channels  
+When fixed-resolution output is enabled, the system calculates how many frames fit within the specified dimensions and automatically distributes additional frames across multiple sprite sheets.
 
-#### Compositor Output
-- Renders frames through compositor nodes  
-- Uses defined resolution per sprite cell  
+For example:
 
----
+```text
+Output Resolution: 1024 x 1024
+Cell Resolution:   128 x 128
+Columns:           8
+Rows:              8
+Frames Per Sheet:  64
+```
 
-### Batch Processing Engine (Directory Mode)
+This allows large image sequences to be converted into multiple consistently sized sprite sheets without manually dividing the source images.
 
-- Modal, timer-driven execution  
-- Processes subdirectories automatically  
-- One sprite sheet per directory  
+### UDIM Sprite Sheet Support
 
----
+Image sequences containing UDIM identifiers are automatically detected and grouped by tile number.
 
-### Sprite Sheet Assembly
+Each UDIM group can be processed independently, generating separate sprite sheets for each detected tile.
 
-- Grid layout (Columns × Rows)  
-- Frame placement:
-  - Left-to-right  
-  - Top-to-bottom  
-- Source frames are **resampled to match cell size**  
-- Stops when grid capacity is reached  
+### VSE Support
 
----
+Sprite Sheet Creator can render frames from the Blender VSE and assemble them into sprite sheets.
 
-### Image Processing Pipeline
+![VSE Sprite Sheet Creator](https://raw.githubusercontent.com/PurgatoryMP/Sequenced_Bake/refs/heads/main/Screenshots/SpriteSheetCreatorVSE.PNG)
 
-- NumPy-backed pixel processing for efficient bulk image manipulation  
-- Per-frame:
-  - Load  
-  - Rescale  
-  - Write to atlas  
-
----
-
-### Output System
-
-- Multiple formats (PNG, EXR, etc.)  
-- Auto naming and overwrite control  
-- Flexible output paths  
-
----
-
-## Output Structure
-
-### Single Output
-
-- <output_path>/<SpriteSheetName>.png
-
-### Batch Directory Output
-
-<root_directory>/
-Sequence_A/
-    Sequence_A.png
-
-Sequence_B/
-    Sequence_B.png
-
+![Eyeball Sprite Sheet](https://raw.githubusercontent.com/PurgatoryMP/Sequenced_Bake/refs/heads/main/Screenshots/eyeballSpriteSheet.png)
 
 ---
 
-## Usage
+# Typical Pipeline
 
-1. Select source (Directory / VSE / Compositor)  
-2. Set frame range  
-3. Configure grid layout  
-4. Define output settings  
-5. Generate sprite sheet  
+Sequenced Bake and Sprite Sheet Creator can be used together as a complete material-animation pipeline:
+
+```text
+Animated Material
+       ↓
+Sequenced Bake
+       ↓
+Image Sequence
+       ↓
+Sprite Sheet Creator
+       ↓
+Flipbook / Sprite Atlas
+       ↓
+Real-Time Playback
+```
+
+This allows procedural and shader-driven animation to be converted into conventional texture sequences for use in real-time and downstream asset pipelines.
 
 ---
 
-## Notes
-
-- Designed to pair directly with **Sequenced Bake**  
-- Optimized for:
-  - Flipbook textures  
-  - Sprite animation  
-  - Real-time pipelines  
-
----
-
-## Pipeline / Use Cases
+# Use Cases
 
 ### Game Development
 
-- Flipbook textures  
-- Particle atlases  
-- Engine-ready sprite sheets  
+- Animated PBR textures
+- Flipbook materials
+- Particle effects
+- Pre-baked shader effects
+- Engine-ready texture sequences
+- Color ID texture generation
+- Sprite sheet and atlas creation
+
+### VFX & Motion Graphics
+
+- Dissolves
+- Energy effects
+- Scans
+- Animated masks
+- Procedural effects
+- Animated material caching
+
+### Procedural Material Development
+
+- Concrete surface materials
+- Curvature-based effects
+- Magma and lava materials
+- Water materials
+- Procedural decals
+- Reusable Shader Editor node groups
+
+### Procedural Material Caching
+
+Bake time-dependent materials into image sequences for deterministic playback and reduced runtime shader evaluation.
+
+### Second Life
+
+- Sculpt map generation
+- Animated sculpt workflows
+- Texture sequences
+- Flipbook-style material animation
 
 ---
 
-### Sequenced Bake Integration
+# Requirements
 
-- Direct pipeline:
-  - Bake → Image Sequence → Sprite Sheet  
-
----
-
-### Batch Processing
-
-- Process entire animation libraries  
-- One folder = one sprite sheet  
+- **Blender 5.2**
+- **Cycles** render engine
 
 ---
 
-## Community / Support
+# Community & Support
 
-- **Discord**: https://discord.gg/uZw54mGKZH
+**Discord:** https://discord.gg/uZw54mGKZH
